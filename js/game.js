@@ -9,8 +9,12 @@
   const input = new global.InputController();
   const hud = new global.Hud();
   const bulletManager = new global.BulletManager();
-  const player = new global.Player(input, bulletManager, hud);
+  const bombEffect = new global.BombEffect();
   const emitter = new global.Emitter(bulletManager);
+  const enemyManager = new global.EnemyManager(emitter);
+  const bossController = new global.BossController(emitter);
+  const stageManager = new global.StageManager(enemyManager, bossController, bulletManager);
+  const player = new global.Player(input, bulletManager, hud, bombEffect);
 
   hud.setScore(0);
   hud.setGraze(0);
@@ -18,7 +22,6 @@
   hud.setLife(player.life);
 
   let lastTime = performance.now();
-  let bossTime = 0;
 
   /**
    * 基于 requestAnimationFrame 的主循环。
@@ -27,7 +30,6 @@
   function gameLoop(now) {
     const deltaTime = Math.min((now - lastTime) / 1000, 0.033);
     lastTime = now;
-    bossTime += deltaTime;
 
     update(deltaTime);
     render(now);
@@ -39,25 +41,18 @@
 
   function update(deltaTime) {
     player.update(deltaTime);
-    bulletManager.update(deltaTime, player);
-
-    const bossX = GAME_WIDTH * 0.5 + Math.sin(bossTime * 0.75) * 110;
-    const bossY = 130 + Math.sin(bossTime * 1.25) * 18;
-
-    // 每 0.5 秒打一轮扇形弹。
-    if (Math.floor(bossTime * 2) !== Math.floor((bossTime - deltaTime) * 2)) {
-      emitter.fireNWay(bossX, bossY, 9, 88, 160, 90, 6, "#ffd37e");
-    }
-
-    // 持续更新螺旋弹定时器。
-    emitter.update(deltaTime, bossX, bossY);
+    stageManager.update(deltaTime, player);
+    bulletManager.update(deltaTime, player, enemyManager, bossController);
+    bombEffect.update(deltaTime, bulletManager);
   }
 
   function render(now) {
     drawBackground(now);
-    drawBossDummy();
+    stageManager.renderWorld(ctx);
     bulletManager.render(ctx);
     player.render(ctx);
+    stageManager.renderUi(ctx);
+    bombEffect.render(ctx);
   }
 
   /**
@@ -86,28 +81,6 @@
       ctx.stroke();
     }
 
-    ctx.restore();
-  }
-
-  /**
-   * 这里先画一个 Boss 占位球体，方便观察弹幕发射效果。
-   * 后续可以替换为真正的 Sprite 或角色立绘。
-   */
-  function drawBossDummy() {
-    const x = GAME_WIDTH * 0.5 + Math.sin(bossTime * 0.75) * 110;
-    const y = 130 + Math.sin(bossTime * 1.25) * 18;
-
-    ctx.save();
-    ctx.fillStyle = "#ffc7d9";
-    ctx.beginPath();
-    ctx.arc(x, y, 22, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, 34, 0, Math.PI * 2);
-    ctx.stroke();
     ctx.restore();
   }
 

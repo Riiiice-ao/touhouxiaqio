@@ -35,6 +35,7 @@
         vx: new Float32Array(capacity),
         vy: new Float32Array(capacity),
         radius: new Float32Array(capacity),
+        damage: new Float32Array(capacity),
         active: new Uint8Array(capacity),
         grazed: new Uint8Array(capacity),
         activeIndices: new Int32Array(capacity),
@@ -56,22 +57,22 @@
     /**
      * 生成敌方子弹。
      */
-    spawnBullet(x, y, vx, vy, radius, color) {
-      return this.spawnFromPool(this.enemyPool, x, y, vx, vy, radius, color);
+    spawnBullet(x, y, vx, vy, radius, color, damage = 1) {
+      return this.spawnFromPool(this.enemyPool, x, y, vx, vy, radius, color, damage);
     }
 
     /**
      * 生成玩家子弹。
      */
-    spawnPlayerBullet(x, y, vx, vy, radius, color) {
-      return this.spawnFromPool(this.playerPool, x, y, vx, vy, radius, color);
+    spawnPlayerBullet(x, y, vx, vy, radius, color, damage = 1) {
+      return this.spawnFromPool(this.playerPool, x, y, vx, vy, radius, color, damage);
     }
 
     /**
      * 从对象池中取出一个槽位并填入子弹数据。
      * 如果池已经满了，则直接丢弃本次生成请求。
      */
-    spawnFromPool(pool, x, y, vx, vy, radius, color) {
+    spawnFromPool(pool, x, y, vx, vy, radius, color, damage) {
       if (pool.freeTop <= 0) {
         return -1;
       }
@@ -84,6 +85,7 @@
       pool.vx[slot] = vx;
       pool.vy[slot] = vy;
       pool.radius[slot] = radius;
+      pool.damage[slot] = damage;
       pool.colors[slot] = color;
       pool.active[slot] = 1;
       pool.grazed[slot] = 0;
@@ -99,9 +101,9 @@
      * 每一帧统一更新全部子弹。
      * 敌弹负责做玩家碰撞和擦弹判定，玩家弹这里只做飞行与回收。
      */
-    update(deltaTime, player) {
+    update(deltaTime, player, enemyManager, bossController) {
       this.updateEnemyBullets(deltaTime, player);
-      this.updatePlayerBullets(deltaTime);
+      this.updatePlayerBullets(deltaTime, enemyManager, bossController, player);
     }
 
     updateEnemyBullets(deltaTime, player) {
@@ -138,7 +140,7 @@
       }
     }
 
-    updatePlayerBullets(deltaTime) {
+    updatePlayerBullets(deltaTime, enemyManager, bossController, player) {
       const pool = this.playerPool;
       let i = 0;
 
@@ -149,6 +151,22 @@
         pool.y[slot] += pool.vy[slot] * deltaTime;
 
         if (this.isOutOfBounds(pool.x[slot], pool.y[slot])) {
+          this.recycle(pool, slot);
+          continue;
+        }
+
+        if (
+          enemyManager &&
+          enemyManager.checkBulletHit(pool.x[slot], pool.y[slot], pool.radius[slot], pool.damage[slot], player)
+        ) {
+          this.recycle(pool, slot);
+          continue;
+        }
+
+        if (
+          bossController &&
+          bossController.checkBulletHit(pool.x[slot], pool.y[slot], pool.radius[slot], pool.damage[slot], player)
+        ) {
           this.recycle(pool, slot);
           continue;
         }
@@ -166,6 +184,28 @@
       while (pool.count > 0) {
         const slot = pool.activeIndices[0];
         this.recycle(pool, slot);
+      }
+    }
+
+    /**
+     * Bomb 震荡波逐步扩散时，用半径扫掉覆盖范围内的敌弹。
+     */
+    clearEnemyBulletsInRadius(centerX, centerY, radius) {
+      const pool = this.enemyPool;
+      let i = 0;
+
+      while (i < pool.count) {
+        const slot = pool.activeIndices[i];
+        const dx = pool.x[slot] - centerX;
+        const dy = pool.y[slot] - centerY;
+        const bulletRadius = pool.radius[slot];
+
+        if (dx * dx + dy * dy <= (radius + bulletRadius) * (radius + bulletRadius)) {
+          this.recycle(pool, slot);
+          continue;
+        }
+
+        i += 1;
       }
     }
 
@@ -194,6 +234,7 @@
       pool.activePositions[slot] = -1;
       pool.active[slot] = 0;
       pool.grazed[slot] = 0;
+      pool.damage[slot] = 0;
 
       pool.freeIndices[pool.freeTop] = slot;
       pool.freeTop += 1;

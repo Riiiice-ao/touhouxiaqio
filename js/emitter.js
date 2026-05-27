@@ -43,6 +43,51 @@
     }
 
     /**
+     * 发射环形弹。
+     */
+    fireRing(x, y, count, speed, startAngle = 0, radius = 6, color = "#ffb35c") {
+      if (count <= 0) {
+        return;
+      }
+
+      const step = 360 / count;
+      for (let i = 0; i < count; i += 1) {
+        const angle = startAngle + step * i;
+        const velocity = this.angleToVelocity(angle, speed);
+        this.bulletManager.spawnBullet(x, y, velocity.vx, velocity.vy, radius, color);
+      }
+    }
+
+    /**
+     * 朝目标方向发射扇形弹。
+     */
+    fireAimedNWay(
+      x,
+      y,
+      targetX,
+      targetY,
+      wayCount,
+      spreadAngle,
+      speed,
+      radius = 5,
+      color = "#9ed8ff"
+    ) {
+      const centerAngle = this.getAngleToTarget(x, y, targetX, targetY);
+      this.fireNWay(x, y, wayCount, spreadAngle, speed, centerAngle, radius, color);
+    }
+
+    /**
+     * 发射一对相对的螺旋弹臂。
+     */
+    fireSpiralPair(x, y, baseAngle, speed, radius = 5, colorA = "#ffa46d", colorB = "#ff6b83") {
+      const primary = this.angleToVelocity(baseAngle, speed);
+      const secondary = this.angleToVelocity(baseAngle + 180, speed);
+
+      this.bulletManager.spawnBullet(x, y, primary.vx, primary.vy, radius, colorA);
+      this.bulletManager.spawnBullet(x, y, secondary.vx, secondary.vy, radius, colorB);
+    }
+
+    /**
      * 连续螺旋弹。
      * 通过累积计时器来保证不同帧率下，发射节奏仍然稳定。
      */
@@ -65,6 +110,14 @@
 
       this.bulletManager.spawnBullet(x, y, primary.vx, primary.vy, 5, "#ffa46d");
       this.bulletManager.spawnBullet(x, y, secondary.vx, secondary.vy, 5, "#ff6b83");
+    }
+
+    /**
+     * 计算发射源指向目标点的角度。
+     * Canvas 坐标系下，0 度向右，90 度向下。
+     */
+    getAngleToTarget(x, y, targetX, targetY) {
+      return (Math.atan2(targetY - y, targetX - x) * 180) / Math.PI;
     }
 
     /**

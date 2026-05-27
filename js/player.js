@@ -6,6 +6,7 @@
     PLAYER_FOCUS_MULTIPLIER,
     PLAYER_GRAZE_RADIUS,
     PLAYER_HITBOX_RADIUS,
+    PLAYER_BULLET_DAMAGE,
     PLAYER_NORMAL_SPEED,
     PLAYER_BULLET_SPEED,
   } = global.Config;
@@ -15,10 +16,11 @@
    * 负责移动、低速模式、射击、Bomb、擦弹反馈和受击窗口。
    */
   class Player {
-    constructor(input, bulletManager, hud) {
+    constructor(input, bulletManager, hud, bombEffect) {
       this.input = input;
       this.bulletManager = bulletManager;
       this.hud = hud;
+      this.bombEffect = bombEffect;
 
       this.x = GAME_WIDTH * 0.5;
       this.y = GAME_HEIGHT - 96;
@@ -29,6 +31,7 @@
       this.focusMultiplier = PLAYER_FOCUS_MULTIPLIER;
       this.fireInterval = PLAYER_FIRE_INTERVAL;
       this.bulletSpeed = PLAYER_BULLET_SPEED;
+      this.bulletDamage = PLAYER_BULLET_DAMAGE;
 
       this.fireCooldown = 0;
       this.isFocusMode = false;
@@ -108,8 +111,24 @@
       this.fireCooldown = this.fireInterval;
 
       const sideOffset = this.isFocusMode ? 7 : 15;
-      this.bulletManager.spawnPlayerBullet(this.x - sideOffset, this.y - 20, 0, -this.bulletSpeed, 4, "#8df1ff");
-      this.bulletManager.spawnPlayerBullet(this.x + sideOffset, this.y - 20, 0, -this.bulletSpeed, 4, "#8df1ff");
+      this.bulletManager.spawnPlayerBullet(
+        this.x - sideOffset,
+        this.y - 20,
+        0,
+        -this.bulletSpeed,
+        4,
+        "#8df1ff",
+        this.bulletDamage
+      );
+      this.bulletManager.spawnPlayerBullet(
+        this.x + sideOffset,
+        this.y - 20,
+        0,
+        -this.bulletSpeed,
+        4,
+        "#8df1ff",
+        this.bulletDamage
+      );
     }
 
     /**
@@ -118,14 +137,14 @@
      */
     handleBombInput() {
       if (this.input.wasPressed("KeyX") && !this.pendingDeath && this.bombStock > 0) {
-        this.consumeBomb();
+        this.consumeBomb("SPELL CARD ORB !!");
       }
     }
 
-    consumeBomb() {
+    consumeBomb(label) {
       this.bombStock = Math.max(0, this.bombStock - 1);
       this.invincibleTimer = 1.2;
-      this.bulletManager.clearEnemyBullets();
+      this.bombEffect.start(this.x, this.y, label);
       this.hud.setBomb(this.bombStock);
     }
 
@@ -162,7 +181,7 @@
       }
 
       this.pendingDeath = false;
-      this.consumeBomb();
+      this.consumeBomb("MASTER SPARK !!");
       return true;
     }
 
