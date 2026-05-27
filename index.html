@@ -9,7 +9,6 @@
 <body>
   <main class="page-shell">
     <section class="game-panel">
-      <!-- 左侧 HUD：这里只显示分数和资源，不参与游戏对象渲染 -->
       <div class="hud-card">
         <div class="hud-line">
           <span class="hud-label">Score</span>
@@ -28,10 +27,78 @@
           <span id="lifeValue">03</span>
         </div>
       </div>
-      <!-- 游戏唯一主画布：所有子弹、自机、Boss 占位体都绘制在这里 -->
-      <canvas id="gameCanvas" width="600" height="800" aria-label="Touhou style danmaku playground"></canvas>
+
+      <div class="game-stack">
+        <canvas id="gameCanvas" width="600" height="800" aria-label="Touhou style danmaku playground"></canvas>
+
+        <div id="startMenu" class="overlay-screen">
+          <div class="overlay-panel title-panel">
+            <p class="eyebrow">Scarlet Curtain</p>
+            <h1>xTouhouXiaQio</h1>
+            <p class="overlay-copy">请选择挑战难度，红魔馆的弹幕帷幕即将展开。</p>
+            <div class="overlay-actions">
+              <button id="easyButton" class="menu-btn menu-btn-easy" type="button">简单难度 Easy</button>
+              <button id="hardButton" class="menu-btn menu-btn-hard" type="button">困难难度 Hard</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="pauseMenu" class="overlay-screen is-hidden">
+          <div class="overlay-panel modal-panel">
+            <p class="eyebrow">Pause</p>
+            <h2>游戏已暂停</h2>
+            <p class="overlay-copy">要继续冲击弹幕，还是重整旗鼓重新开始？</p>
+            <div class="overlay-actions">
+              <button id="resumeButton" class="menu-btn menu-btn-easy" type="button">继续游戏</button>
+              <button id="restartButton" class="menu-btn menu-btn-hard" type="button">确认重新开始</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="gameOverMenu" class="overlay-screen is-hidden">
+          <div class="overlay-panel modal-panel">
+            <p class="eyebrow">Continue?</p>
+            <h2>残机耗尽</h2>
+            <p class="overlay-copy">你要以分数代价复活继续挑战，还是结束本次战斗？</p>
+            <div class="overlay-actions">
+              <button id="continueButton" class="menu-btn menu-btn-easy" type="button">复活 Continue</button>
+              <button id="endGameButton" class="menu-btn menu-btn-hard" type="button">结束游戏</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="scoreBoard" class="overlay-screen is-hidden">
+          <div class="overlay-panel score-panel">
+            <p class="eyebrow">Score Board</p>
+            <h2>战果结算</h2>
+            <div class="score-grid">
+              <div class="score-row">
+                <span>挑战难度</span>
+                <strong id="resultDifficulty">Easy</strong>
+              </div>
+              <div class="score-row">
+                <span>最终得分</span>
+                <strong id="resultScore">0000000</strong>
+              </div>
+              <div class="score-row">
+                <span>最高擦弹</span>
+                <strong id="resultGraze">0000</strong>
+              </div>
+              <div class="score-row">
+                <span>称号评级</span>
+                <strong id="resultTitle">初学者</strong>
+              </div>
+            </div>
+            <div class="overlay-actions">
+              <button id="backToMenuButton" class="menu-btn menu-btn-easy" type="button">回到主菜单</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <aside class="info-card">
         <h1>xTouhouXiaQio</h1>
+        <button id="pauseButton" class="side-btn" type="button">重新开始 / 菜单</button>
         <p>方向键移动</p>
         <p>Z 射击</p>
         <p>Shift 低速</p>
@@ -41,10 +108,10 @@
     </section>
   </main>
 
-  <!-- 使用普通脚本顺序加载，保证双击 index.html 时在本地文件环境也更容易运行 -->
   <script src="./js/config.js"></script>
   <script src="./js/input.js"></script>
   <script src="./js/hud.js"></script>
+  <script src="./js/uiManager.js"></script>
   <script src="./js/healthSystem.js"></script>
   <script src="./js/bulletManager.js"></script>
   <script src="./js/emitter.js"></script>

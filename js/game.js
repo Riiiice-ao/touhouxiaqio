@@ -8,6 +8,7 @@
 
   const input = new global.InputController();
   const hud = new global.Hud();
+  const ui = new global.UiManager();
   const bulletManager = new global.BulletManager();
   const bombEffect = new global.BombEffect();
   const emitter = new global.Emitter(bulletManager);
@@ -16,17 +17,28 @@
   const stageManager = new global.StageManager(enemyManager, bossController, bulletManager);
   const player = new global.Player(input, bulletManager, hud, bombEffect);
 
-  hud.setScore(0);
-  hud.setGraze(0);
-  hud.setBomb(player.bombStock);
-  hud.setLife(player.life);
+  const gameState = {
+    currentDifficulty: null,
+    scene: "menu",
+    isPaused: false,
+  };
+
+  hud.reset(player);
+
+  ui.bind({
+    onSelectDifficulty: startGame,
+    onPauseMenu: openPauseMenu,
+    onResume: resumeGame,
+    onRestartConfirmed: restartCurrentRun,
+    onContinue: continueRun,
+    onEndGame: endGameToScoreBoard,
+    onBackToMenu: backToMainMenu,
+  });
+
+  ui.showStartMenu();
 
   let lastTime = performance.now();
 
-  /**
-   * 基于 requestAnimationFrame 的主循环。
-   * deltaTime 以秒为单位，并做一个上限钳制，避免切回页面时瞬移过大。
-   */
   function gameLoop(now) {
     const deltaTime = Math.min((now - lastTime) / 1000, 0.033);
     lastTime = now;
@@ -34,16 +46,121 @@
     update(deltaTime);
     render(now);
 
-    // 这一帧逻辑全部结束后，再清掉“刚按下”的输入状态。
     input.endFrame();
     requestAnimationFrame(gameLoop);
   }
 
+  function startGame(difficulty) {
+    gameState.currentDifficulty = difficulty;
+    gameState.scene = "playing";
+    gameState.isPaused = false;
+    ui.hideAllOverlayMenus();
+    resetRunState();
+  }
+
+  function resetRunState() {
+    bulletManager.clearEnemyBullets();
+    enemyManager.clearAll();
+    bossController.reset();
+    stageManager.setDifficulty(gameState.currentDifficulty ?? "easy");
+    stageManager.reset();
+    player.resetRunState();
+    hud.reset(player);
+  }
+
+  function openPauseMenu() {
+    if (gameState.scene !== "playing" || gameState.isPaused) {
+      return;
+    }
+
+    gameState.isPaused = true;
+    ui.showPauseMenu();
+  }
+
+  function resumeGame() {
+    if (gameState.scene !== "playing") {
+      return;
+    }
+
+    gameState.isPaused = false;
+    ui.hideAllOverlayMenus();
+  }
+
+  function restartCurrentRun() {
+    if (!gameState.currentDifficulty) {
+      backToMainMenu();
+      return;
+    }
+
+    gameState.scene = "playing";
+    gameState.isPaused = false;
+    ui.hideAllOverlayMenus();
+    resetRunState();
+  }
+
+  function continueRun() {
+    gameState.scene = "playing";
+    gameState.isPaused = false;
+    bulletManager.clearEnemyBullets();
+    player.reviveAtCheckpoint("half");
+    ui.hideAllOverlayMenus();
+  }
+
+  function endGameToScoreBoard() {
+    gameState.scene = "score";
+    gameState.isPaused = true;
+    ui.showScoreBoard(buildScoreResult());
+  }
+
+  function backToMainMenu() {
+    gameState.scene = "menu";
+    gameState.isPaused = false;
+    gameState.currentDifficulty = null;
+    bulletManager.clearEnemyBullets();
+    enemyManager.clearAll();
+    bossController.reset();
+    stageManager.reset();
+    player.resetRunState();
+    ui.showStartMenu();
+  }
+
+  function buildScoreResult() {
+    return {
+      difficulty: gameState.currentDifficulty === "hard" ? "Hard" : "Easy",
+      score: String(player.score).padStart(7, "0"),
+      graze: String(player.maxGraze).padStart(4, "0"),
+      title: getTitleByScore(player.score),
+    };
+  }
+
+  function getTitleByScore(score) {
+    if (score >= 1000000) {
+      return "Shrine Maiden";
+    }
+    if (score >= 500000) {
+      return "Scarlet Hunter";
+    }
+    if (score >= 100000) {
+      return "Danmaku Adept";
+    }
+    return "Beginner";
+  }
+
   function update(deltaTime) {
+    if (gameState.scene !== "playing" || gameState.isPaused) {
+      return;
+    }
+
     player.update(deltaTime);
     stageManager.update(deltaTime, player);
     bulletManager.update(deltaTime, player, enemyManager, bossController);
     bombEffect.update(deltaTime, bulletManager);
+
+    if (player.life <= 0 && !player.isDying) {
+      gameState.scene = "gameover";
+      gameState.isPaused = true;
+      ui.showGameOverMenu();
+    }
   }
 
   function render(now) {
@@ -55,10 +172,6 @@
     bombEffect.render(ctx);
   }
 
-  /**
-   * 简单的纵向卷轴背景。
-   * 这里只用渐变和线条做占位，后续可以直接替换成贴图滚动背景。
-   */
   function drawBackground(now) {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 

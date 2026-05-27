@@ -10,6 +10,8 @@
     PLAYER_DEATH_WINDOW,
     PLAYER_NORMAL_SPEED,
     PLAYER_BULLET_SPEED,
+    MAX_BOMB_STOCK,
+    MAX_LIFE_STOCK,
   } = global.Config;
 
   class Player {
@@ -30,13 +32,16 @@
       this.fireInterval = PLAYER_FIRE_INTERVAL;
       this.bulletSpeed = PLAYER_BULLET_SPEED;
       this.bulletDamage = PLAYER_BULLET_DAMAGE;
+      this.maxBombStock = MAX_BOMB_STOCK;
+      this.maxLifeStock = MAX_LIFE_STOCK;
 
       this.fireCooldown = 0;
       this.isFocusMode = false;
-      this.bombStock = 3;
-      this.life = 3;
+      this.bombStock = MAX_BOMB_STOCK;
+      this.life = MAX_LIFE_STOCK;
       this.score = 0;
       this.graze = 0;
+      this.maxGraze = 0;
       this.invincibleTimer = 0;
       this.deathbombTimer = 0;
       this.deathbombWindow = PLAYER_DEATH_WINDOW;
@@ -163,6 +168,7 @@
 
     triggerGraze() {
       this.graze += 1;
+      this.maxGraze = Math.max(this.maxGraze, this.graze);
       this.score += 50;
       this.hud.setGraze(this.graze);
       this.hud.setScore(this.score);
@@ -191,16 +197,59 @@
       this.isDying = false;
       this.fatalBulletSlot = -1;
       this.life = Math.max(0, this.life - 1);
+      this.refillBombs();
       this.invincibleTimer = 2;
       this.x = GAME_WIDTH * 0.5;
       this.y = GAME_HEIGHT - 96;
       this.bulletManager.clearEnemyBullets();
       this.hud.setLife(this.life);
+      this.hud.setBomb(this.bombStock);
     }
 
     addScore(points) {
       this.score += points;
       this.hud.setScore(this.score);
+    }
+
+    refillBombs() {
+      this.bombStock = this.maxBombStock;
+    }
+
+    restoreLivesAndBombs() {
+      this.life = this.maxLifeStock;
+      this.refillBombs();
+      this.isDying = false;
+      this.fatalBulletSlot = -1;
+      this.deathbombTimer = 0;
+      this.invincibleTimer = 2;
+    }
+
+    reviveAtCheckpoint(resetScoreMode = "half") {
+      this.restoreLivesAndBombs();
+      if (resetScoreMode === "zero") {
+        this.score = 0;
+      } else {
+        this.score = Math.floor(this.score * 0.5);
+      }
+      this.x = GAME_WIDTH * 0.5;
+      this.y = GAME_HEIGHT - 96;
+      this.hud.reset(this);
+    }
+
+    resetRunState() {
+      this.x = GAME_WIDTH * 0.5;
+      this.y = GAME_HEIGHT - 96;
+      this.fireCooldown = 0;
+      this.isFocusMode = false;
+      this.score = 0;
+      this.graze = 0;
+      this.maxGraze = 0;
+      this.invincibleTimer = 0;
+      this.deathbombTimer = 0;
+      this.isDying = false;
+      this.fatalBulletSlot = -1;
+      this.restoreLivesAndBombs();
+      this.hud.reset(this);
     }
 
     render(ctx) {

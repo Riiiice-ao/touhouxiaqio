@@ -1,14 +1,17 @@
 (function registerHud(global) {
-  /**
-   * 简易 HUD 控制器。
-   * 这里只负责同步界面文本，不参与任何游戏逻辑计算。
-   */
   class Hud {
     constructor() {
       this.scoreValue = document.getElementById("scoreValue");
       this.grazeValue = document.getElementById("grazeValue");
       this.bombValue = document.getElementById("bombValue");
       this.lifeValue = document.getElementById("lifeValue");
+    }
+
+    reset(player) {
+      this.setScore(player.score);
+      this.setGraze(player.graze);
+      this.setBomb(player.bombStock);
+      this.setLife(player.life);
     }
 
     setScore(score) {

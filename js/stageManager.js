@@ -8,17 +8,20 @@
     MINION_WAVE_INTERVAL_MIN,
   } = global.Config;
 
-  /**
-   * 关卡状态机。
-   * 用来管理“小怪阶段 -> Boss 登场 -> Boss 战 -> 通关”的全局流程。
-   */
   class StageManager {
     constructor(enemyManager, bossController, bulletManager) {
       this.enemyManager = enemyManager;
       this.bossController = bossController;
       this.bulletManager = bulletManager;
+      this.difficulty = "easy";
 
       this.reset();
+    }
+
+    setDifficulty(difficulty) {
+      this.difficulty = difficulty;
+      this.enemyManager.setDifficulty(difficulty);
+      this.bossController.setDifficulty(difficulty);
     }
 
     reset() {
@@ -96,7 +99,9 @@
     }
 
     randomWaveInterval() {
-      return MINION_WAVE_INTERVAL_MIN + Math.random() * (MINION_WAVE_INTERVAL_MAX - MINION_WAVE_INTERVAL_MIN);
+      const base =
+        MINION_WAVE_INTERVAL_MIN + Math.random() * (MINION_WAVE_INTERVAL_MAX - MINION_WAVE_INTERVAL_MIN);
+      return this.difficulty === "hard" ? base * 0.6 : base;
     }
 
     renderWorld(ctx) {

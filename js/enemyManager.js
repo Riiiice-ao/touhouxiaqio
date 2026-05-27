@@ -4,15 +4,15 @@
   const TYPE_B = 2;
   const TYPE_C = 3;
 
-  /**
-   * 小怪管理器。
-   * 采用和子弹池类似的“扁平数组 + 空闲槽位栈”设计，
-   * 避免频繁 new / delete 敌机对象。
-   */
   class EnemyManager {
     constructor(emitter) {
       this.emitter = emitter;
       this.pool = this.createPool(MAX_ENEMIES);
+      this.difficulty = "easy";
+    }
+
+    setDifficulty(difficulty) {
+      this.difficulty = difficulty;
     }
 
     createPool(capacity) {
@@ -53,10 +53,6 @@
       return this.pool.count;
     }
 
-    /**
-     * 随机刷一波小怪。
-     * 编队和类型都做轻量随机，让关卡第一阶段有明显变化。
-     */
     spawnRandomWave() {
       const roll = Math.random();
       if (roll < 0.34) {
@@ -86,6 +82,8 @@
             { x: 64, y: 48 },
           ];
 
+      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : 1;
+
       for (let i = 0; i < offsets.length; i += 1) {
         const offset = offsets[i];
         this.spawnEnemy(TYPE_A, originX + offset.x, originY + offset.y, 0, 120 + Math.random() * 28, {
@@ -93,6 +91,7 @@
           health: 4,
           score: 160,
           attackTimer: 0.55 + Math.random() * 0.35,
+          bulletSpeedBonus,
         });
       }
     }
@@ -117,6 +116,8 @@
             { x: 0, y: 72 },
           ];
 
+      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : 1;
+
       for (let i = 0; i < offsets.length; i += 1) {
         const offset = offsets[i];
         this.spawnEnemy(
@@ -131,6 +132,7 @@
             score: 180,
             attackTimer: 0.9 + Math.random() * 0.4,
             direction: xDirection,
+            bulletSpeedBonus,
           }
         );
       }
@@ -152,6 +154,8 @@
             { x: 42, y: 28 },
           ];
 
+      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : 1;
+
       for (let i = 0; i < offsets.length; i += 1) {
         const offset = offsets[i];
         this.spawnEnemy(TYPE_C, originX + offset.x, originY + offset.y, 0, 44, {
@@ -159,6 +163,7 @@
           health: 5,
           score: 240,
           attackTimer: 1.1 + Math.random() * 0.25,
+          bulletSpeedBonus,
         });
       }
     }
@@ -187,6 +192,7 @@
       pool.active[slot] = 1;
 
       global.HealthSystem.resetPoolSlot(pool, slot, options.health);
+      pool.maxHealth[slot] = options.bulletSpeedBonus || 1;
 
       pool.activeIndices[pool.count] = slot;
       pool.activePositions[slot] = pool.count;
@@ -230,7 +236,16 @@
 
       if (pool.attackTimer[slot] <= 0) {
         pool.attackTimer[slot] += 1;
-        this.emitter.fireNWay(pool.x[slot], pool.y[slot] + 12, 1, 0, 180, 90, 5, "#ffc892");
+        this.emitter.fireNWay(
+          pool.x[slot],
+          pool.y[slot] + 12,
+          1,
+          0,
+          180 * pool.maxHealth[slot],
+          90,
+          5,
+          "#ffc892"
+        );
       }
     }
 
@@ -248,7 +263,7 @@
           player.y,
           3,
           18,
-          170,
+          170 * pool.maxHealth[slot],
           4,
           "#8ec4ff"
         );
@@ -277,7 +292,7 @@
             pool.x[slot],
             pool.y[slot],
             6,
-            140,
+            140 * pool.maxHealth[slot],
             pool.driftTimer[slot] * 45,
             5,
             "#efb0ff"
@@ -293,10 +308,6 @@
       pool.y[slot] += pool.vy[slot] * deltaTime;
     }
 
-    /**
-     * 玩家子弹对小怪的纯数学碰撞。
-     * 命中后扣血，血量归零则加分并回收。
-     */
     checkBulletHit(x, y, radius, damage, player) {
       const pool = this.pool;
       for (let i = 0; i < pool.count; i += 1) {
@@ -339,6 +350,7 @@
       pool.activePositions[slot] = -1;
       pool.active[slot] = 0;
       pool.shotCount[slot] = 0;
+      pool.maxHealth[slot] = 0;
       pool.freeIndices[pool.freeTop] = slot;
       pool.freeTop += 1;
     }

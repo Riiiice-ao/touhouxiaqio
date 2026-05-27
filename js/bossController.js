@@ -21,8 +21,13 @@
       this.targetX = BOSS_ENTRY_X;
       this.targetY = BOSS_ENTRY_Y;
       this.lanePositions = [140, 300, 460];
+      this.difficulty = "easy";
 
       this.reset();
+    }
+
+    setDifficulty(difficulty) {
+      this.difficulty = difficulty;
     }
 
     reset() {
@@ -153,54 +158,69 @@
     }
 
     updatePhaseOnePatterns(player) {
+      const hard = this.difficulty === "hard";
+
       if (this.waveTimer <= 0) {
-        this.waveTimer += this.moveState === "stopped" ? 0.26 : 0.52;
+        const baseInterval = this.moveState === "stopped" ? 0.26 : 0.52;
+        this.waveTimer += hard ? baseInterval * 0.76 : baseInterval;
         const spread = this.moveState === "stopped" ? 145 : 92;
-        const ways = this.moveState === "stopped" ? 13 : 9;
+        const ways = this.moveState === "stopped" ? (hard ? 15 : 13) : hard ? 11 : 9;
         this.emitter.fireNWay(this.x, this.y, ways, spread, 170, 90, 6, "#ffd37e");
       }
 
       if (this.aimedTimer <= 0) {
-        this.aimedTimer += 1.45;
-        this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 3, 22, 198, 5, "#9fd5ff");
+        this.aimedTimer += hard ? 1.08 : 1.45;
+        this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, hard ? 5 : 3, 22, 198, 5, "#9fd5ff");
       }
 
-      while (this.spiralTimer >= 0.05) {
-        this.spiralTimer -= 0.05;
+      const spiralStep = hard ? 0.04 : 0.05;
+      while (this.spiralTimer >= spiralStep) {
+        this.spiralTimer -= spiralStep;
         this.spiralAngle += this.moveState === "stopped" ? 18 : 12;
         this.emitter.fireSpiralPair(this.x, this.y, this.spiralAngle, 192, 5, "#ffa46d", "#ff6b83");
       }
     }
 
     updatePhaseTwoPatterns(player) {
+      const hard = this.difficulty === "hard";
+
       if (this.moveState === "moving") {
         if (this.followTimer <= 0) {
-          this.followTimer += 0.5;
+          this.followTimer += hard ? 0.38 : 0.5;
           this.emitter.fireRetargetFollower(this.x, this.y, player.x, player.y);
         }
         return;
       }
 
       if (this.splitTimer <= 0) {
-        this.splitTimer += 0.82;
+        this.splitTimer += hard ? 0.64 : 0.82;
         this.emitter.fireSplitBurstMother(this.x - 32, this.y + 12, 98);
         this.emitter.fireSplitBurstMother(this.x + 32, this.y + 12, 82);
+        if (hard) {
+          this.emitter.fireSplitBurstMother(this.x, this.y + 4, 90);
+        }
       }
     }
 
     updatePhaseThreePatterns(player) {
+      const hard = this.difficulty === "hard";
+
       if (this.moveState === "moving") {
         if (this.followTimer <= 0) {
-          this.followTimer += 0.42;
+          this.followTimer += hard ? 0.34 : 0.42;
           this.emitter.fireRetargetFollower(this.x, this.y, player.x, player.y);
         }
         return;
       }
 
       if (this.randomTimer <= 0) {
-        this.randomTimer += 1.04;
+        this.randomTimer += hard ? 0.82 : 1.04;
         const startAngle = Math.random() * 360;
-        this.emitter.fireDelayedRandomRing(this.x, this.y, 12, 210, startAngle);
+        this.emitter.fireDelayedRandomRing(this.x, this.y, hard ? 16 : 12, 210, startAngle);
+        if (hard) {
+          this.emitter.fireSplitBurstMother(this.x - 48, this.y + 10, 102);
+          this.emitter.fireSplitBurstMother(this.x + 48, this.y + 10, 78);
+        }
       }
     }
 
