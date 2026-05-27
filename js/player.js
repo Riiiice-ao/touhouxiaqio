@@ -7,14 +7,11 @@
     PLAYER_GRAZE_RADIUS,
     PLAYER_HITBOX_RADIUS,
     PLAYER_BULLET_DAMAGE,
+    PLAYER_DEATH_WINDOW,
     PLAYER_NORMAL_SPEED,
     PLAYER_BULLET_SPEED,
   } = global.Config;
 
-  /**
-   * 玩家控制器。
-   * 负责移动、低速模式、射击、Bomb、擦弹反馈和受击窗口。
-   */
   class Player {
     constructor(input, bulletManager, hud, bombEffect) {
       this.input = input;
@@ -26,6 +23,7 @@
       this.y = GAME_HEIGHT - 96;
       this.radius = 12;
       this.hitboxRadius = PLAYER_HITBOX_RADIUS;
+      this.deathRadius = PLAYER_HITBOX_RADIUS;
       this.grazeRadius = PLAYER_GRAZE_RADIUS;
       this.baseSpeed = PLAYER_NORMAL_SPEED;
       this.focusMultiplier = PLAYER_FOCUS_MULTIPLIER;
@@ -41,15 +39,16 @@
       this.graze = 0;
       this.invincibleTimer = 0;
       this.deathbombTimer = 0;
-      this.deathbombWindow = 0.16;
-      this.pendingDeath = false;
+      this.deathbombWindow = PLAYER_DEATH_WINDOW;
+      this.isDying = false;
+      this.fatalBulletSlot = -1;
     }
 
     update(deltaTime) {
       this.isFocusMode = this.input.isDown("ShiftLeft") || this.input.isDown("ShiftRight");
       this.invincibleTimer = Math.max(0, this.invincibleTimer - deltaTime);
 
-      if (this.pendingDeath) {
+      if (this.isDying) {
         this.deathbombTimer -= deltaTime;
 
         if (this.input.wasPressed("KeyX") && this.tryDeathBomb()) {
@@ -57,8 +56,10 @@
         }
 
         if (this.deathbombTimer <= 0) {
-          this.resolveDeath();
+          this.pichuun();
         }
+
+        return;
       }
 
       this.handleMovement(deltaTime);
@@ -66,10 +67,6 @@
       this.handleBombInput();
     }
 
-    /**
-     * 基础八方向移动。
-     * 斜向移动时做归一化，避免斜着走更快。
-     */
     handleMovement(deltaTime) {
       let moveX = 0;
       let moveY = 0;
@@ -97,10 +94,6 @@
       this.y = Math.max(this.radius, Math.min(GAME_HEIGHT - this.radius, this.y));
     }
 
-    /**
-     * Z 键持续射击。
-     * Focus 状态下，左右发射点更靠近中心，模拟收束火力感。
-     */
     handleAttack(deltaTime) {
       this.fireCooldown = Math.max(0, this.fireCooldown - deltaTime);
 
@@ -131,12 +124,8 @@
       );
     }
 
-    /**
-     * X 键主动 Bomb。
-     * 使用 wasPressed，避免长按一帧内把 Bomb 全部耗光。
-     */
     handleBombInput() {
-      if (this.input.wasPressed("KeyX") && !this.pendingDeath && this.bombStock > 0) {
+      if (this.input.wasPressed("KeyX") && !this.isDying && this.bombStock > 0) {
         this.consumeBomb("SPELL CARD ORB !!");
       }
     }
@@ -148,22 +137,30 @@
       this.hud.setBomb(this.bombStock);
     }
 
-    /**
-     * 受击入口。
-     * 当前不立刻判死，而是进入极短的 Deathbomb 判定窗口。
-     */
-    takeDamage() {
-      if (this.invincibleTimer > 0 || this.pendingDeath) {
-        return;
-      }
-
-      this.pendingDeath = true;
-      this.deathbombTimer = this.deathbombWindow;
+    takeDamage(fatalBulletSlot = -1) {
+      return this.beginDying(fatalBulletSlot);
     }
 
-    /**
-     * 擦弹时加 Graze 和分数。
-     */
+    beginDying(fatalBulletSlot) {
+      if (this.invincibleTimer > 0 || this.isDying) {
+        return false;
+      }
+
+      this.isDying = true;
+      this.fatalBulletSlot = fatalBulletSlot;
+      this.deathbombTimer = this.deathbombWindow;
+
+      if (this.input.wasPressed("KeyX") && this.bombStock > 0) {
+        return this.tryDeathBomb();
+      }
+
+      return true;
+    }
+
+    isFatalBulletSlot(slot) {
+      return this.isDying && this.fatalBulletSlot === slot;
+    }
+
     triggerGraze() {
       this.graze += 1;
       this.score += 50;
@@ -171,26 +168,28 @@
       this.hud.setScore(this.score);
     }
 
-    /**
-     * 决死结界尝试。
-     * 如果窗口内按下 X 且还有 Bomb，就保命并清屏。
-     */
     tryDeathBomb() {
-      if (this.bombStock <= 0) {
+      if (!this.isDying || this.bombStock <= 0) {
         return false;
       }
 
-      this.pendingDeath = false;
+      if (this.fatalBulletSlot >= 0) {
+        this.bulletManager.clearEnemyBulletBySlot(this.fatalBulletSlot);
+      }
+
+      this.isDying = false;
+      this.fatalBulletSlot = -1;
       this.consumeBomb("MASTER SPARK !!");
       return true;
     }
 
-    /**
-     * 死亡结算。
-     * 这里顺手清一次屏，避免重生后立刻又撞上旧弹。
-     */
-    resolveDeath() {
-      this.pendingDeath = false;
+    pichuun() {
+      if (this.fatalBulletSlot >= 0) {
+        this.bulletManager.clearEnemyBulletBySlot(this.fatalBulletSlot);
+      }
+
+      this.isDying = false;
+      this.fatalBulletSlot = -1;
       this.life = Math.max(0, this.life - 1);
       this.invincibleTimer = 2;
       this.x = GAME_WIDTH * 0.5;
@@ -204,10 +203,6 @@
       this.hud.setScore(this.score);
     }
 
-    /**
-     * 自机绘制。
-     * Focus 时显示红色核心判定点，并额外画出决死窗口提示环。
-     */
     render(ctx) {
       ctx.save();
 
@@ -232,15 +227,15 @@
       if (this.isFocusMode) {
         ctx.fillStyle = "#ff4f5c";
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.hitboxRadius, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.deathRadius, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      if (this.pendingDeath) {
+      if (this.isDying) {
         ctx.strokeStyle = "#fff04a";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.hitboxRadius + 8, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.deathRadius + 8, 0, Math.PI * 2);
         ctx.stroke();
       }
 

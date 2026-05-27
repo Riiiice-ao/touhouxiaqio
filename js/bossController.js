@@ -1,17 +1,26 @@
 (function registerBossController(global) {
-  const { BOSS_ENTRY_X, BOSS_ENTRY_Y, BOSS_MAX_HEALTH, GAME_WIDTH } = global.Config;
+  const {
+    BOSS_ENTRY_X,
+    BOSS_ENTRY_Y,
+    BOSS_MAX_HEALTH,
+    BOSS_MOVE_DURATION_MAX,
+    BOSS_MOVE_DURATION_MIN,
+    BOSS_PHASE_THREE_THRESHOLD,
+    BOSS_PHASE_TWO_THRESHOLD,
+    BOSS_STOP_DURATION,
+    GAME_WIDTH,
+  } = global.Config;
 
-  /**
-   * Boss 控制器。
-   * 负责登场移动、Boss 弹幕脚本和顶部血条渲染。
-   */
   class BossController {
-    constructor(emitter) {
+    constructor(emitter, bulletManager, bombEffect) {
       this.emitter = emitter;
+      this.bulletManager = bulletManager;
+      this.bombEffect = bombEffect;
       this.radius = 30;
       this.entrySpeed = 120;
       this.targetX = BOSS_ENTRY_X;
       this.targetY = BOSS_ENTRY_Y;
+      this.lanePositions = [140, 300, 460];
 
       this.reset();
     }
@@ -20,13 +29,26 @@
       this.active = false;
       this.inBattle = false;
       this.defeated = false;
+      this.phase = 1;
+      this.phaseName = "Scarlet Bloom";
+      this.phaseBarColors = ["#ffe0d5", "#ff8f80", "#f3404c", "#8b1020"];
       this.x = BOSS_ENTRY_X;
       this.y = -92;
-      this.moveTimer = 0;
-      this.waveTimer = 0.25;
+      this.moveClock = 0;
+      this.moveState = "moving";
+      this.moveStartX = BOSS_ENTRY_X;
+      this.moveEndX = BOSS_ENTRY_X;
+      this.moveElapsed = 0;
+      this.moveDuration = 2.4;
+      this.stopTimer = BOSS_STOP_DURATION;
+      this.pauseDuration = BOSS_STOP_DURATION;
+      this.waveTimer = 0.35;
       this.aimedTimer = 1.1;
       this.spiralTimer = 0;
       this.spiralAngle = 0;
+      this.followTimer = 0.45;
+      this.splitTimer = 0.8;
+      this.randomTimer = 0.95;
       global.HealthSystem.resetEntity(this, BOSS_MAX_HEALTH);
     }
 
@@ -58,6 +80,7 @@
         this.x = this.targetX;
         this.y = this.targetY;
         this.inBattle = true;
+        this.beginMoveTo(this.chooseNextDestination());
         return;
       }
 
@@ -66,29 +89,161 @@
     }
 
     updateBattle(deltaTime, player) {
-      this.moveTimer += deltaTime;
+      this.moveClock += deltaTime;
+      this.updateMovementState(deltaTime);
+
       this.waveTimer -= deltaTime;
       this.aimedTimer -= deltaTime;
       this.spiralTimer += deltaTime;
+      this.followTimer -= deltaTime;
+      this.splitTimer -= deltaTime;
+      this.randomTimer -= deltaTime;
 
-      this.x = this.targetX + Math.sin(this.moveTimer * 0.7) * 110;
-      this.y = this.targetY + Math.sin(this.moveTimer * 1.35) * 18;
+      if (this.phase === 1) {
+        this.updatePhaseOnePatterns(player);
+        return;
+      }
 
+      if (this.phase === 2) {
+        this.updatePhaseTwoPatterns(player);
+        return;
+      }
+
+      this.updatePhaseThreePatterns(player);
+    }
+
+    updateMovementState(deltaTime) {
+      if (this.moveState === "moving") {
+        this.moveElapsed += deltaTime;
+        const progress = Math.min(1, this.moveElapsed / this.moveDuration);
+        const eased = 0.5 - Math.cos(Math.PI * progress) * 0.5;
+        this.x = this.moveStartX + (this.moveEndX - this.moveStartX) * eased;
+        this.y = this.targetY + Math.sin(this.moveClock * 1.3) * 10;
+
+        if (progress >= 1) {
+          this.moveState = "stopped";
+          this.stopTimer = this.pauseDuration;
+          this.x = this.moveEndX;
+        }
+
+        return;
+      }
+
+      this.stopTimer -= deltaTime;
+      this.x = this.moveEndX;
+      this.y = this.targetY + Math.sin(this.moveClock * 1.3) * 6;
+
+      if (this.stopTimer <= 0) {
+        this.beginMoveTo(this.chooseNextDestination());
+      }
+    }
+
+    beginMoveTo(destinationX) {
+      this.moveState = "moving";
+      this.moveStartX = this.x;
+      this.moveEndX = destinationX;
+      this.moveElapsed = 0;
+      this.moveDuration =
+        BOSS_MOVE_DURATION_MIN + Math.random() * (BOSS_MOVE_DURATION_MAX - BOSS_MOVE_DURATION_MIN);
+    }
+
+    chooseNextDestination() {
+      const candidates = this.lanePositions.filter((position) => Math.abs(position - this.x) > 30);
+      return candidates[Math.floor(Math.random() * candidates.length)] ?? this.targetX;
+    }
+
+    updatePhaseOnePatterns(player) {
       if (this.waveTimer <= 0) {
-        this.waveTimer += 0.55;
-        this.emitter.fireNWay(this.x, this.y, 9, 90, 168, 90, 6, "#ffd37e");
+        this.waveTimer += this.moveState === "stopped" ? 0.26 : 0.52;
+        const spread = this.moveState === "stopped" ? 145 : 92;
+        const ways = this.moveState === "stopped" ? 13 : 9;
+        this.emitter.fireNWay(this.x, this.y, ways, spread, 170, 90, 6, "#ffd37e");
       }
 
       if (this.aimedTimer <= 0) {
-        this.aimedTimer += 1.5;
-        this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 3, 22, 196, 5, "#9fd5ff");
+        this.aimedTimer += 1.45;
+        this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 3, 22, 198, 5, "#9fd5ff");
       }
 
-      while (this.spiralTimer >= 0.045) {
-        this.spiralTimer -= 0.045;
-        this.spiralAngle += 13;
+      while (this.spiralTimer >= 0.05) {
+        this.spiralTimer -= 0.05;
+        this.spiralAngle += this.moveState === "stopped" ? 18 : 12;
         this.emitter.fireSpiralPair(this.x, this.y, this.spiralAngle, 192, 5, "#ffa46d", "#ff6b83");
       }
+    }
+
+    updatePhaseTwoPatterns(player) {
+      if (this.moveState === "moving") {
+        if (this.followTimer <= 0) {
+          this.followTimer += 0.5;
+          this.emitter.fireRetargetFollower(this.x, this.y, player.x, player.y);
+        }
+        return;
+      }
+
+      if (this.splitTimer <= 0) {
+        this.splitTimer += 0.82;
+        this.emitter.fireSplitBurstMother(this.x - 32, this.y + 12, 98);
+        this.emitter.fireSplitBurstMother(this.x + 32, this.y + 12, 82);
+      }
+    }
+
+    updatePhaseThreePatterns(player) {
+      if (this.moveState === "moving") {
+        if (this.followTimer <= 0) {
+          this.followTimer += 0.42;
+          this.emitter.fireRetargetFollower(this.x, this.y, player.x, player.y);
+        }
+        return;
+      }
+
+      if (this.randomTimer <= 0) {
+        this.randomTimer += 1.04;
+        const startAngle = Math.random() * 360;
+        this.emitter.fireDelayedRandomRing(this.x, this.y, 12, 210, startAngle);
+      }
+    }
+
+    updatePhaseByHealth() {
+      const ratio = global.HealthSystem.getRatio(this);
+
+      if (this.phase === 1 && ratio <= BOSS_PHASE_TWO_THRESHOLD) {
+        this.enterPhase(2);
+        return;
+      }
+
+      if (this.phase === 2 && ratio <= BOSS_PHASE_THREE_THRESHOLD) {
+        this.enterPhase(3);
+      }
+    }
+
+    enterPhase(phase) {
+      this.phase = phase;
+
+      if (phase === 2) {
+        this.phaseName = "Split Burst Sign";
+        this.phaseBarColors = ["#fff8d4", "#ffc642", "#ff8a00", "#912700"];
+      } else if (phase === 3) {
+        this.phaseName = "Chaotic Freeze Sign";
+        this.phaseBarColors = ["#d6f1ff", "#4bb4ff", "#0e69f0", "#07266c"];
+      }
+
+      this.bulletManager.clearEnemyBullets();
+      this.bombEffect.start(this.x, this.y, this.phaseName, {
+        clearsBullets: false,
+        overlayAlpha: 0.28,
+        ringColor: phase === 2 ? "255, 220, 120" : "120, 220, 255",
+        shadowColor: phase === 2 ? "rgba(255, 180, 60, 0.55)" : "rgba(80, 180, 255, 0.55)",
+        textColor: phase === 2 ? "rgba(255, 247, 205, 0.98)" : "rgba(220, 245, 255, 0.98)",
+      });
+
+      this.moveState = "stopped";
+      this.stopTimer = 1.1;
+      this.waveTimer = 0.24;
+      this.aimedTimer = 0.6;
+      this.followTimer = 0.32;
+      this.splitTimer = 0.45;
+      this.randomTimer = 0.55;
     }
 
     checkBulletHit(x, y, radius, damage, player) {
@@ -109,6 +264,8 @@
         this.active = false;
         this.inBattle = false;
         player.addScore(5000);
+      } else {
+        this.updatePhaseByHealth();
       }
 
       return true;
@@ -162,10 +319,10 @@
       ctx.fillRect(x, y, width, height);
 
       const barGradient = ctx.createLinearGradient(x, y, x + width, y);
-      barGradient.addColorStop(0, "#ffe0d5");
-      barGradient.addColorStop(0.18, "#ff8f80");
-      barGradient.addColorStop(0.55, "#f3404c");
-      barGradient.addColorStop(1, "#8b1020");
+      barGradient.addColorStop(0, this.phaseBarColors[0]);
+      barGradient.addColorStop(0.18, this.phaseBarColors[1]);
+      barGradient.addColorStop(0.55, this.phaseBarColors[2]);
+      barGradient.addColorStop(1, this.phaseBarColors[3]);
       ctx.fillStyle = barGradient;
       ctx.fillRect(x, y, width * ratio, height);
 
@@ -177,7 +334,7 @@
       ctx.font = "bold 14px Trebuchet MS";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillText("SCARLET BOSS HP", GAME_WIDTH * 0.5, y - 4);
+      ctx.fillText(`${this.phaseName}  HP`, GAME_WIDTH * 0.5, y - 4);
 
       ctx.restore();
     }

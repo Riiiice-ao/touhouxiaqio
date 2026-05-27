@@ -7,25 +7,21 @@
     MAX_PLAYER_BULLETS,
   } = global.Config;
 
-  /**
-   * 子弹管理器。
-   *
-   * 设计目标：
-   * 1. 不用 DOM 渲染子弹
-   * 2. 不在每帧 new / delete 子弹对象
-   * 3. 子弹核心数据放进扁平数组，便于统一更新和绘制
-   * 4. 通过“空闲槽位栈 + 活跃索引表”模拟对象池
-   */
+  const BulletBehavior = {
+    NONE: 0,
+    RETARGET_ONCE: 1,
+    SPLIT_BURST: 2,
+    DELAYED_RANDOM: 3,
+  };
+
+  global.BulletBehavior = BulletBehavior;
+
   class BulletManager {
     constructor() {
       this.enemyPool = this.createPool(MAX_BULLETS);
       this.playerPool = this.createPool(MAX_PLAYER_BULLETS);
     }
 
-    /**
-     * 创建一组固定容量的扁平数组池。
-     * 每个索引槽位就代表一颗子弹。
-     */
     createPool(capacity) {
       const pool = {
         capacity,
@@ -36,6 +32,13 @@
         vy: new Float32Array(capacity),
         radius: new Float32Array(capacity),
         damage: new Float32Array(capacity),
+        behaviorType: new Uint8Array(capacity),
+        behaviorState: new Uint8Array(capacity),
+        lifeTimer: new Float32Array(capacity),
+        param0: new Float32Array(capacity),
+        param1: new Float32Array(capacity),
+        param2: new Float32Array(capacity),
+        param3: new Float32Array(capacity),
         active: new Uint8Array(capacity),
         grazed: new Uint8Array(capacity),
         activeIndices: new Int32Array(capacity),
@@ -54,25 +57,15 @@
       return pool;
     }
 
-    /**
-     * 生成敌方子弹。
-     */
-    spawnBullet(x, y, vx, vy, radius, color, damage = 1) {
-      return this.spawnFromPool(this.enemyPool, x, y, vx, vy, radius, color, damage);
+    spawnBullet(x, y, vx, vy, radius, color, damage = 1, behavior = null) {
+      return this.spawnFromPool(this.enemyPool, x, y, vx, vy, radius, color, damage, behavior);
     }
 
-    /**
-     * 生成玩家子弹。
-     */
-    spawnPlayerBullet(x, y, vx, vy, radius, color, damage = 1) {
-      return this.spawnFromPool(this.playerPool, x, y, vx, vy, radius, color, damage);
+    spawnPlayerBullet(x, y, vx, vy, radius, color, damage = 1, behavior = null) {
+      return this.spawnFromPool(this.playerPool, x, y, vx, vy, radius, color, damage, behavior);
     }
 
-    /**
-     * 从对象池中取出一个槽位并填入子弹数据。
-     * 如果池已经满了，则直接丢弃本次生成请求。
-     */
-    spawnFromPool(pool, x, y, vx, vy, radius, color, damage) {
+    spawnFromPool(pool, x, y, vx, vy, radius, color, damage, behavior) {
       if (pool.freeTop <= 0) {
         return -1;
       }
@@ -87,6 +80,13 @@
       pool.radius[slot] = radius;
       pool.damage[slot] = damage;
       pool.colors[slot] = color;
+      pool.behaviorType[slot] = behavior?.type ?? BulletBehavior.NONE;
+      pool.behaviorState[slot] = behavior?.state ?? 0;
+      pool.lifeTimer[slot] = 0;
+      pool.param0[slot] = behavior?.param0 ?? 0;
+      pool.param1[slot] = behavior?.param1 ?? 0;
+      pool.param2[slot] = behavior?.param2 ?? 0;
+      pool.param3[slot] = behavior?.param3 ?? 0;
       pool.active[slot] = 1;
       pool.grazed[slot] = 0;
 
@@ -97,10 +97,6 @@
       return slot;
     }
 
-    /**
-     * 每一帧统一更新全部子弹。
-     * 敌弹负责做玩家碰撞和擦弹判定，玩家弹这里只做飞行与回收。
-     */
     update(deltaTime, player, enemyManager, bossController) {
       this.updateEnemyBullets(deltaTime, player);
       this.updatePlayerBullets(deltaTime, enemyManager, bossController, player);
@@ -113,6 +109,16 @@
       while (i < pool.count) {
         const slot = pool.activeIndices[i];
 
+        if (player.isFatalBulletSlot(slot)) {
+          i += 1;
+          continue;
+        }
+
+        pool.lifeTimer[slot] += deltaTime;
+        if (this.updateEnemyBulletBehavior(slot, deltaTime, player)) {
+          continue;
+        }
+
         pool.x[slot] += pool.vx[slot] * deltaTime;
         pool.y[slot] += pool.vy[slot] * deltaTime;
 
@@ -121,13 +127,17 @@
           continue;
         }
 
+        if (player.isDying) {
+          i += 1;
+          continue;
+        }
+
         const dx = pool.x[slot] - player.x;
         const dy = pool.y[slot] - player.y;
         const distance = Math.hypot(dx, dy);
 
-        if (distance < player.hitboxRadius + pool.radius[slot]) {
-          player.takeDamage();
-          this.recycle(pool, slot);
+        if (distance < player.deathRadius + pool.radius[slot]) {
+          player.takeDamage(slot);
           continue;
         }
 
@@ -137,6 +147,80 @@
         }
 
         i += 1;
+      }
+    }
+
+    updateEnemyBulletBehavior(slot, deltaTime, player) {
+      const pool = this.enemyPool;
+      const behaviorType = pool.behaviorType[slot];
+
+      if (behaviorType === BulletBehavior.NONE) {
+        return false;
+      }
+
+      if (behaviorType === BulletBehavior.RETARGET_ONCE) {
+        if (pool.behaviorState[slot] === 0 && pool.lifeTimer[slot] >= pool.param0[slot]) {
+          const angle = Math.atan2(player.y - pool.y[slot], player.x - pool.x[slot]);
+          const speed = pool.param1[slot];
+          pool.vx[slot] = Math.cos(angle) * speed;
+          pool.vy[slot] = Math.sin(angle) * speed;
+          pool.behaviorState[slot] = 1;
+        }
+        return false;
+      }
+
+      if (behaviorType === BulletBehavior.SPLIT_BURST) {
+        if (pool.lifeTimer[slot] >= pool.param0[slot]) {
+          this.explodeSplitBurst(slot);
+          return true;
+        }
+        return false;
+      }
+
+      if (behaviorType === BulletBehavior.DELAYED_RANDOM) {
+        if (pool.behaviorState[slot] === 0) {
+          const dragFactor = Math.max(0, 1 - pool.param3[slot] * deltaTime);
+          pool.vx[slot] *= dragFactor;
+          pool.vy[slot] *= dragFactor;
+
+          if (pool.lifeTimer[slot] >= pool.param0[slot]) {
+            pool.vx[slot] = 0;
+            pool.vy[slot] = 0;
+            pool.behaviorState[slot] = 1;
+            pool.lifeTimer[slot] = 0;
+          }
+          return false;
+        }
+
+        if (pool.behaviorState[slot] === 1 && pool.lifeTimer[slot] >= pool.param1[slot]) {
+          const randomAngle = Math.random() * Math.PI * 2;
+          const speed = pool.param2[slot];
+          pool.vx[slot] = Math.cos(randomAngle) * speed;
+          pool.vy[slot] = Math.sin(randomAngle) * speed;
+          pool.behaviorState[slot] = 2;
+          pool.lifeTimer[slot] = 0;
+        }
+
+        return false;
+      }
+
+      return false;
+    }
+
+    explodeSplitBurst(slot) {
+      const pool = this.enemyPool;
+      const x = pool.x[slot];
+      const y = pool.y[slot];
+      const count = Math.max(1, Math.round(pool.param1[slot]));
+      const speed = pool.param2[slot];
+      const step = (Math.PI * 2) / count;
+      const startAngle = (pool.lifeTimer[slot] * 5.3) % (Math.PI * 2);
+
+      this.recycle(pool, slot);
+
+      for (let i = 0; i < count; i += 1) {
+        const angle = startAngle + step * i;
+        this.spawnBullet(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 3, "#ff00ff");
       }
     }
 
@@ -175,9 +259,6 @@
       }
     }
 
-    /**
-     * Bomb 触发时清屏。
-     */
     clearEnemyBullets() {
       const pool = this.enemyPool;
 
@@ -187,9 +268,12 @@
       }
     }
 
-    /**
-     * Bomb 震荡波逐步扩散时，用半径扫掉覆盖范围内的敌弹。
-     */
+    clearEnemyBulletBySlot(slot) {
+      if (this.enemyPool.activePositions[slot] >= 0) {
+        this.recycle(this.enemyPool, slot);
+      }
+    }
+
     clearEnemyBulletsInRadius(centerX, centerY, radius) {
       const pool = this.enemyPool;
       let i = 0;
@@ -218,10 +302,6 @@
       );
     }
 
-    /**
-     * O(1) 回收。
-     * 通过“末尾元素换位”把被删除的活跃槽位移除掉，避免数组 splice。
-     */
     recycle(pool, slot) {
       const removePosition = pool.activePositions[slot];
       const lastPosition = pool.count - 1;
@@ -235,15 +315,18 @@
       pool.active[slot] = 0;
       pool.grazed[slot] = 0;
       pool.damage[slot] = 0;
+      pool.behaviorType[slot] = BulletBehavior.NONE;
+      pool.behaviorState[slot] = 0;
+      pool.lifeTimer[slot] = 0;
+      pool.param0[slot] = 0;
+      pool.param1[slot] = 0;
+      pool.param2[slot] = 0;
+      pool.param3[slot] = 0;
 
       pool.freeIndices[pool.freeTop] = slot;
       pool.freeTop += 1;
     }
 
-    /**
-     * 统一渲染所有子弹。
-     * 为了减少 beginPath 次数，这里尽量把连续相同颜色的子弹合并在一次 fill 中。
-     */
     render(ctx) {
       this.renderPool(ctx, this.enemyPool);
       this.renderPool(ctx, this.playerPool);

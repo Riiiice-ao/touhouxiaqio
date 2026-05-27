@@ -1,14 +1,6 @@
 (function registerBombEffect(global) {
   const { BOMB_EFFECT_DURATION, GAME_HEIGHT, GAME_WIDTH } = global.Config;
 
-  /**
-   * Bomb 视觉控制器。
-   * 负责：
-   * 1. 播放中央大字提示
-   * 2. 绘制半透明遮罩
-   * 3. 绘制从自机扩散的清屏震荡波
-   * 4. 随着圆环扩散逐步清除敌弹
-   */
   class BombEffect {
     constructor() {
       this.active = false;
@@ -19,15 +11,25 @@
       this.radius = 0;
       this.maxRadius = Math.hypot(GAME_WIDTH, GAME_HEIGHT);
       this.label = "SPELL CARD ORB !!";
+      this.overlayAlpha = 0.35;
+      this.clearsBullets = true;
+      this.ringColor = "255, 255, 255";
+      this.shadowColor = "rgba(255, 120, 80, 0.45)";
+      this.textColor = "rgba(255, 248, 235, 0.96)";
     }
 
-    start(originX, originY, label) {
+    start(originX, originY, label, options = {}) {
       this.active = true;
       this.timer = 0;
       this.radius = 0;
       this.originX = originX;
       this.originY = originY;
       this.label = label;
+      this.overlayAlpha = options.overlayAlpha ?? 0.35;
+      this.clearsBullets = options.clearsBullets ?? true;
+      this.ringColor = options.ringColor ?? "255, 255, 255";
+      this.shadowColor = options.shadowColor ?? "rgba(255, 120, 80, 0.45)";
+      this.textColor = options.textColor ?? "rgba(255, 248, 235, 0.96)";
     }
 
     update(deltaTime, bulletManager) {
@@ -40,7 +42,9 @@
       const eased = 1 - Math.pow(1 - progress, 3);
       this.radius = this.maxRadius * eased;
 
-      bulletManager.clearEnemyBulletsInRadius(this.originX, this.originY, this.radius);
+      if (this.clearsBullets) {
+        bulletManager.clearEnemyBulletsInRadius(this.originX, this.originY, this.radius);
+      }
 
       if (progress >= 1) {
         this.active = false;
@@ -53,7 +57,7 @@
       }
 
       const progress = Math.min(1, this.timer / this.duration);
-      const alpha = (1 - progress) * 0.35;
+      const alpha = (1 - progress) * this.overlayAlpha;
       const textScale = 0.7 + Math.sin(progress * Math.PI) * 0.45;
 
       ctx.save();
@@ -77,7 +81,7 @@
       ctx.arc(this.originX, this.originY, this.radius, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.strokeStyle = `rgba(255, 255, 255, ${0.9 - progress * 0.5})`;
+      ctx.strokeStyle = `rgba(${this.ringColor}, ${0.9 - progress * 0.5})`;
       ctx.lineWidth = 8 - progress * 4;
       ctx.beginPath();
       ctx.arc(this.originX, this.originY, this.radius, 0, Math.PI * 2);
@@ -85,9 +89,9 @@
 
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.shadowColor = "rgba(255, 120, 80, 0.45)";
+      ctx.shadowColor = this.shadowColor;
       ctx.shadowBlur = 24;
-      ctx.fillStyle = "rgba(255, 248, 235, 0.96)";
+      ctx.fillStyle = this.textColor;
       ctx.font = `italic ${Math.floor(34 + 28 * textScale)}px Georgia`;
       ctx.fillText(this.label, GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5);
 

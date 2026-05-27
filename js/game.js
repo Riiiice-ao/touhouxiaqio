@@ -12,7 +12,7 @@
   const bombEffect = new global.BombEffect();
   const emitter = new global.Emitter(bulletManager);
   const enemyManager = new global.EnemyManager(emitter);
-  const bossController = new global.BossController(emitter);
+  const bossController = new global.BossController(emitter, bulletManager, bombEffect);
   const stageManager = new global.StageManager(enemyManager, bossController, bulletManager);
   const player = new global.Player(input, bulletManager, hud, bombEffect);
 

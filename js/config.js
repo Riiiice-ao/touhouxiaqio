@@ -1,10 +1,5 @@
 window.XTouhouWeb = window.XTouhouWeb || {};
 
-/**
- * 全局配置常量。
- * 这里统一存放画布尺寸、玩家参数和对象池容量，
- * 后续如果要调平衡或做分辨率适配，只需要修改这一处。
- */
 window.XTouhouWeb.Config = {
   GAME_WIDTH: 600,
   GAME_HEIGHT: 800,
@@ -15,6 +10,7 @@ window.XTouhouWeb.Config = {
   PLAYER_FIRE_INTERVAL: 0.09,
   PLAYER_BULLET_SPEED: 620,
   PLAYER_BULLET_DAMAGE: 1,
+  PLAYER_DEATH_WINDOW: 0.16,
   MAX_BULLETS: 2500,
   MAX_PLAYER_BULLETS: 256,
   MAX_ENEMIES: 48,
@@ -26,5 +22,10 @@ window.XTouhouWeb.Config = {
   BOSS_MAX_HEALTH: 360,
   BOSS_ENTRY_X: 300,
   BOSS_ENTRY_Y: 160,
+  BOSS_PHASE_TWO_THRESHOLD: 0.66,
+  BOSS_PHASE_THREE_THRESHOLD: 0.33,
+  BOSS_MOVE_DURATION_MIN: 2,
+  BOSS_MOVE_DURATION_MAX: 3,
+  BOSS_STOP_DURATION: 2,
   BOMB_EFFECT_DURATION: 0.55,
 };

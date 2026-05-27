@@ -1,8 +1,6 @@
 (function registerEmitter(global) {
-  /**
-   * 发射器。
-   * 所有弹幕几何模式最终都会落到“角度 -> 速度向量”的数学转换上。
-   */
+  const BulletBehavior = global.BulletBehavior;
+
   class Emitter {
     constructor(bulletManager) {
       this.bulletManager = bulletManager;
@@ -11,16 +9,6 @@
       this.spiralInterval = 0.04;
     }
 
-    /**
-     * 发射扇形 N-Way。
-     *
-     * @param {number} x 发射源 X
-     * @param {number} y 发射源 Y
-     * @param {number} wayCount 子弹数量
-     * @param {number} spreadAngle 扇形总夹角，单位为度
-     * @param {number} speed 子弹速度
-     * @param {number} centerAngle 扇形中心朝向，90 度代表正下方
-     */
     fireNWay(x, y, wayCount, spreadAngle, speed, centerAngle, radius = 6, color = "#ffb35c") {
       if (wayCount <= 0) {
         return;
@@ -42,9 +30,6 @@
       }
     }
 
-    /**
-     * 发射环形弹。
-     */
     fireRing(x, y, count, speed, startAngle = 0, radius = 6, color = "#ffb35c") {
       if (count <= 0) {
         return;
@@ -58,9 +43,6 @@
       }
     }
 
-    /**
-     * 朝目标方向发射扇形弹。
-     */
     fireAimedNWay(
       x,
       y,
@@ -76,9 +58,6 @@
       this.fireNWay(x, y, wayCount, spreadAngle, speed, centerAngle, radius, color);
     }
 
-    /**
-     * 发射一对相对的螺旋弹臂。
-     */
     fireSpiralPair(x, y, baseAngle, speed, radius = 5, colorA = "#ffa46d", colorB = "#ff6b83") {
       const primary = this.angleToVelocity(baseAngle, speed);
       const secondary = this.angleToVelocity(baseAngle + 180, speed);
@@ -87,10 +66,74 @@
       this.bulletManager.spawnBullet(x, y, secondary.vx, secondary.vy, radius, colorB);
     }
 
-    /**
-     * 连续螺旋弹。
-     * 通过累积计时器来保证不同帧率下，发射节奏仍然稳定。
-     */
+    fireRetargetFollower(x, y, targetX, targetY) {
+      const initialAngle = this.getAngleToTarget(x, y, targetX, targetY);
+      const velocity = this.angleToVelocity(initialAngle, 128);
+
+      this.bulletManager.spawnBullet(
+        x,
+        y,
+        velocity.vx,
+        velocity.vy,
+        8,
+        "#00ff55",
+        1,
+        {
+          type: BulletBehavior.RETARGET_ONCE,
+          param0: 0.5,
+          param1: 248,
+        }
+      );
+    }
+
+    fireSplitBurstMother(x, y, angleDeg = 90) {
+      const velocity = this.angleToVelocity(angleDeg, 78);
+      this.bulletManager.spawnBullet(
+        x,
+        y,
+        velocity.vx,
+        velocity.vy,
+        16,
+        "#ffff00",
+        1,
+        {
+          type: BulletBehavior.SPLIT_BURST,
+          param0: 1.08,
+          param1: 16,
+          param2: 268,
+        }
+      );
+    }
+
+    fireDelayedRandomRing(x, y, count, speed, startAngle = 0) {
+      if (count <= 0) {
+        return;
+      }
+
+      const step = 360 / count;
+      for (let i = 0; i < count; i += 1) {
+        const angle = startAngle + step * i;
+        const velocity = this.angleToVelocity(angle, speed);
+
+        this.bulletManager.spawnBullet(
+          x,
+          y,
+          velocity.vx,
+          velocity.vy,
+          6,
+          "#0088ff",
+          1,
+          {
+            type: BulletBehavior.DELAYED_RANDOM,
+            param0: 1,
+            param1: 0.8,
+            param2: 236,
+            param3: 5.2,
+          }
+        );
+      }
+    }
+
     update(deltaTime, originX, originY) {
       this.spiralTimer += deltaTime;
 
@@ -100,9 +143,6 @@
       }
     }
 
-    /**
-     * 这里做了一个双臂螺旋，视觉上会更像向日葵/旋涡。
-     */
     fireSpiral(x, y) {
       this.spiralAngle += 11;
       const primary = this.angleToVelocity(this.spiralAngle, 180);
@@ -112,18 +152,10 @@
       this.bulletManager.spawnBullet(x, y, secondary.vx, secondary.vy, 5, "#ff6b83");
     }
 
-    /**
-     * 计算发射源指向目标点的角度。
-     * Canvas 坐标系下，0 度向右，90 度向下。
-     */
     getAngleToTarget(x, y, targetX, targetY) {
       return (Math.atan2(targetY - y, targetX - x) * 180) / Math.PI;
     }
 
-    /**
-     * 把角度转换成速度向量。
-     * 这是规则几何弹幕最基础也最常用的一步。
-     */
     angleToVelocity(angleDeg, speed) {
       const rad = (angleDeg * Math.PI) / 180;
       return {
