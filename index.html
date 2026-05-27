@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>xTouhouXiaQio Web 1</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="game-panel">
+      <!-- 左侧 HUD：这里只显示分数和资源，不参与游戏对象渲染 -->
+      <div class="hud-card">
+        <div class="hud-line">
+          <span class="hud-label">Score</span>
+          <span id="scoreValue">0000000</span>
+        </div>
+        <div class="hud-line">
+          <span class="hud-label">Graze</span>
+          <span id="grazeValue">0000</span>
+        </div>
+        <div class="hud-line">
+          <span class="hud-label">Bomb</span>
+          <span id="bombValue">03</span>
+        </div>
+        <div class="hud-line">
+          <span class="hud-label">Life</span>
+          <span id="lifeValue">03</span>
+        </div>
+      </div>
+      <!-- 游戏唯一主画布：所有子弹、自机、Boss 占位体都绘制在这里 -->
+      <canvas id="gameCanvas" width="600" height="800" aria-label="Touhou style danmaku playground"></canvas>
+      <aside class="info-card">
+        <h1>xTouhouXiaQio</h1>
+        <p>方向键移动</p>
+        <p>Z 射击</p>
+        <p>Shift 低速</p>
+        <p>X Bomb</p>
+        <p class="info-tip">原生 Canvas + 对象池 + 数学碰撞</p>
+      </aside>
+    </section>
+  </main>
+
+  <!-- 使用普通脚本顺序加载，保证双击 index.html 时在本地文件环境也更容易运行 -->
+  <script src="./js/config.js"></script>
+  <script src="./js/input.js"></script>
+  <script src="./js/hud.js"></script>
+  <script src="./js/bulletManager.js"></script>
+  <script src="./js/emitter.js"></script>
+  <script src="./js/player.js"></script>
+  <script src="./js/game.js"></script>
+</body>
+</html>

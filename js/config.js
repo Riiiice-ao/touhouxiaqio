@@ -1,0 +1,20 @@
+window.XTouhouWeb = window.XTouhouWeb || {};
+
+/**
+ * 全局配置常量。
+ * 这里统一存放画布尺寸、玩家参数和对象池容量，
+ * 后续如果要调平衡或做分辨率适配，只需要修改这一处。
+ */
+window.XTouhouWeb.Config = {
+  GAME_WIDTH: 600,
+  GAME_HEIGHT: 800,
+  PLAYER_HITBOX_RADIUS: 4,
+  PLAYER_GRAZE_RADIUS: 20,
+  PLAYER_NORMAL_SPEED: 260,
+  PLAYER_FOCUS_MULTIPLIER: 0.4,
+  PLAYER_FIRE_INTERVAL: 0.09,
+  PLAYER_BULLET_SPEED: 620,
+  MAX_BULLETS: 2500,
+  MAX_PLAYER_BULLETS: 256,
+  BULLET_DESPAWN_PADDING: 40,
+};
