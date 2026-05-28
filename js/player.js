@@ -56,6 +56,7 @@
       this.radius = 12;
       this.hitboxRadius = PLAYER_HITBOX_RADIUS;
       this.deathRadius = PLAYER_HITBOX_RADIUS;
+      this.bodyRadius = 12;
       this.grazeRadius = PLAYER_GRAZE_RADIUS;
       this.baseSpeed = PLAYER_NORMAL_SPEED;
       this.focusMultiplier = PLAYER_FOCUS_MULTIPLIER;
@@ -178,6 +179,11 @@
       this.bombStock = Math.max(0, this.bombStock - 1);
       this.invincibleTimer = 1.2;
       this.bombEffect.start(this.x, this.y, label);
+      this.hud.setBomb(this.bombStock);
+    }
+
+    addBombCharge(amount) {
+      this.bombStock = Math.min(this.maxBombStock, this.bombStock + amount);
       this.hud.setBomb(this.bombStock);
     }
 

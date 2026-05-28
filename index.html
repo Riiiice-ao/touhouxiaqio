@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shrimps Danmaku Castle</title>
+  <title>东方虾球馆 ~ Touhou Xiaqio Castle</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -38,7 +38,7 @@
         <div id="startMenu" class="overlay-screen">
           <div class="overlay-panel title-panel">
             <p class="eyebrow">Touhou Tribute</p>
-            <h1>Shrimps Danmaku Castle<br><span class="title-sub">Touhou Xia Qiu Guan</span></h1>
+            <h1>《东方虾球馆》<br><span class="title-sub">~ Touhou Xiaqio Castle</span></h1>
             <p id="loadingText" class="overlay-copy">Loading assets, please wait...</p>
             <div class="overlay-actions">
               <button id="easyButton" class="menu-btn menu-btn-easy is-disabled" type="button" disabled>Easy</button>
@@ -99,10 +99,21 @@
             </div>
           </div>
         </div>
+
+        <div id="dialogueOverlay" class="dialogue-overlay is-hidden">
+          <div id="dialoguePanel" class="dialogue-panel" role="button" tabindex="0">
+            <div class="dialogue-portrait"></div>
+            <div class="dialogue-body">
+              <div id="dialogueName" class="dialogue-name">哈哈哈哈</div>
+              <div id="dialogueText" class="dialogue-text">哈哈哈哈哈哈哈</div>
+              <div class="dialogue-tip">点击对话框或按 Z / Space 继续</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <aside class="info-card">
-        <h1>Shrimps Castle</h1>
+        <h1>《东方虾球馆》</h1>
         <button id="pauseButton" class="side-btn" type="button">Restart / Menu</button>
         <p>Arrow Keys Move</p>
         <p>Z Shoot</p>
@@ -117,9 +128,11 @@
   <script src="./js/input.js"></script>
   <script src="./js/hud.js"></script>
   <script src="./js/uiManager.js"></script>
+  <script src="./js/dialogueManager.js"></script>
   <script src="./js/assetLoader.js"></script>
   <script src="./js/healthSystem.js"></script>
   <script src="./js/bulletManager.js"></script>
+  <script src="./js/itemManager.js"></script>
   <script src="./js/emitter.js"></script>
   <script src="./js/bombEffect.js"></script>
   <script src="./js/player.js"></script>

@@ -5,21 +5,26 @@
   const TYPE_C = 3;
 
   const ENEMY_FRAMES = {
-    A: { x: 14, y: 12, w: 240, h: 280 },
-    B: { x: 284, y: 10, w: 236, h: 282 },
-    C: { x: 20, y: 362, w: 224, h: 296 },
+    A: { x: 14, y: 14, w: 240, h: 278 },
+    B: { x: 284, y: 12, w: 236, h: 280 },
+    C: { x: 20, y: 364, w: 224, h: 294 },
   };
 
   class EnemyManager {
     constructor(emitter, assetLoader) {
       this.emitter = emitter;
       this.assetLoader = assetLoader;
+      this.itemManager = null;
       this.pool = this.createPool(MAX_ENEMIES);
       this.difficulty = "easy";
     }
 
     setDifficulty(difficulty) {
       this.difficulty = difficulty;
+    }
+
+    setItemManager(itemManager) {
+      this.itemManager = itemManager;
     }
 
     createPool(capacity) {
@@ -332,13 +337,20 @@
 
         if (global.HealthSystem.damagePoolSlot(pool, slot, damage)) {
           player.addScore(pool.score[slot]);
-          this.recycle(slot);
+          this.onEnemyDestroyed(slot);
         }
 
         return true;
       }
 
       return false;
+    }
+
+    onEnemyDestroyed(slot) {
+      if (this.itemManager) {
+        this.itemManager.spawnDrops(this.pool.x[slot], this.pool.y[slot]);
+      }
+      this.recycle(slot);
     }
 
     clearAll() {
@@ -389,7 +401,18 @@
           const frame = type === TYPE_A ? ENEMY_FRAMES.A : type === TYPE_B ? ENEMY_FRAMES.B : ENEMY_FRAMES.C;
           const renderWidth = type === TYPE_C ? 42 : 38;
           const renderHeight = type === TYPE_C ? 54 : 50;
-          ctx.drawImage(sprite, frame.x, frame.y, frame.w, frame.h, x - renderWidth * 0.5, y - renderHeight * 0.55, renderWidth, renderHeight);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(
+            sprite,
+            frame.x,
+            frame.y + 2,
+            frame.w,
+            frame.h - 2,
+            x - renderWidth * 0.5,
+            y - renderHeight * 0.55,
+            renderWidth,
+            renderHeight
+          );
           continue;
         }
 

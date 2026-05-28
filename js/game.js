@@ -9,13 +9,16 @@
   const input = new global.InputController();
   const hud = new global.Hud();
   const ui = new global.UiManager();
+  const dialogueManager = new global.DialogueManager();
   const assetLoader = new global.AssetLoader();
   const bulletManager = new global.BulletManager();
+  const itemManager = new global.ItemManager();
   const bombEffect = new global.BombEffect();
   const emitter = new global.Emitter(bulletManager);
   const enemyManager = new global.EnemyManager(emitter, assetLoader);
+  enemyManager.setItemManager(itemManager);
   const bossController = new global.BossController(emitter, bulletManager, bombEffect, assetLoader);
-  const stageManager = new global.StageManager(enemyManager, bossController, bulletManager);
+  const stageManager = new global.StageManager(enemyManager, bossController, bulletManager, dialogueManager);
   const player = new global.Player(input, bulletManager, hud, bombEffect, assetLoader);
 
   const gameState = {
@@ -58,6 +61,10 @@
     update(deltaTime);
     render(now);
 
+    if (dialogueManager.active && (input.wasPressed("KeyZ") || input.wasPressed("Space"))) {
+      dialogueManager.advance();
+    }
+
     input.endFrame();
     requestAnimationFrame(gameLoop);
   }
@@ -72,10 +79,12 @@
     gameState.isPaused = false;
     ui.hideAllOverlayMenus();
     resetRunState();
+    stageManager.beginIntroDialogue();
   }
 
   function resetRunState() {
     bulletManager.clearEnemyBullets();
+    itemManager.clearAll();
     enemyManager.clearAll();
     bossController.setDifficulty(gameState.currentDifficulty ?? "easy");
     bossController.reset();
@@ -85,10 +94,11 @@
     hud.reset(player);
     hud.setDifficulty(gameState.currentDifficulty);
     gameState.backgroundScroll = 0;
+    dialogueManager.hide();
   }
 
   function openPauseMenu() {
-    if (gameState.scene !== "playing" || gameState.isPaused) {
+    if (gameState.scene !== "playing" || gameState.isPaused || dialogueManager.active) {
       return;
     }
 
@@ -115,12 +125,14 @@
     gameState.isPaused = false;
     ui.hideAllOverlayMenus();
     resetRunState();
+    stageManager.beginIntroDialogue();
   }
 
   function continueRun() {
     gameState.scene = "playing";
     gameState.isPaused = false;
     bulletManager.clearEnemyBullets();
+    itemManager.clearAll();
     player.reviveAtCheckpoint("half");
     ui.hideAllOverlayMenus();
   }
@@ -135,6 +147,7 @@
     gameState.scene = "score";
     gameState.isPaused = true;
     bulletManager.clearEnemyBullets();
+    itemManager.clearAll();
     ui.showScoreBoard(buildScoreResult(true));
   }
 
@@ -143,12 +156,14 @@
     gameState.isPaused = false;
     gameState.currentDifficulty = null;
     bulletManager.clearEnemyBullets();
+    itemManager.clearAll();
     enemyManager.clearAll();
     bossController.reset();
     stageManager.reset();
     player.resetRunState();
     hud.reset(player);
     hud.setDifficulty(null);
+    dialogueManager.hide();
     ui.showStartMenu();
   }
 
@@ -201,7 +216,7 @@
   }
 
   function update(deltaTime) {
-    if (gameState.scene !== "playing" || gameState.isPaused) {
+    if (gameState.scene !== "playing" || gameState.isPaused || dialogueManager.active || stageManager.pauseForDialogue) {
       return;
     }
 
@@ -209,7 +224,9 @@
     player.update(deltaTime);
     stageManager.update(deltaTime, player);
     bulletManager.update(deltaTime, player, enemyManager, bossController);
+    itemManager.update(deltaTime, player);
     bombEffect.update(deltaTime, bulletManager);
+    updateBodyCollisions();
 
     if (stageManager.state === "CLEAR") {
       showGameClearBoard();
@@ -223,6 +240,30 @@
     }
   }
 
+  function updateBodyCollisions() {
+    const enemyPool = enemyManager.pool;
+    for (let i = 0; i < enemyPool.count; i += 1) {
+      const slot = enemyPool.activeIndices[i];
+      const dx = enemyPool.x[slot] - player.x;
+      const dy = enemyPool.y[slot] - player.y;
+      const hitDistance = enemyPool.radius[slot] + player.bodyRadius;
+      if (dx * dx + dy * dy <= hitDistance * hitDistance) {
+        enemyManager.onEnemyDestroyed(slot);
+        player.takeDamage();
+        break;
+      }
+    }
+
+    if (bossController.active && bossController.inBattle && !bossController.defeated) {
+      const dx = bossController.x - player.x;
+      const dy = bossController.y - player.y;
+      const hitDistance = bossController.radius + player.bodyRadius;
+      if (dx * dx + dy * dy <= hitDistance * hitDistance) {
+        player.takeDamage();
+      }
+    }
+  }
+
   function updateBackground(deltaTime) {
     gameState.backgroundScroll += 80 * deltaTime;
     if (gameState.backgroundScroll >= GAME_HEIGHT) {
@@ -233,6 +274,7 @@
   function render(now) {
     drawBackground(now);
     stageManager.renderWorld(ctx);
+    itemManager.render(ctx);
     bulletManager.render(ctx);
     player.render(ctx);
     stageManager.renderUi(ctx);
@@ -254,20 +296,6 @@
     gradient.addColorStop(1, "#2a1018");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.07)";
-    ctx.lineWidth = 1;
-    const scroll = (now * 0.08 + gameState.backgroundScroll) % 40;
-
-    for (let y = -40; y < GAME_HEIGHT + 40; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, y + scroll);
-      ctx.lineTo(GAME_WIDTH, y + scroll);
-      ctx.stroke();
-    }
-
-    ctx.restore();
   }
 
   function drawScrollingBackground(image) {

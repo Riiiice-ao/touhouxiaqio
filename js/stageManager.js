@@ -1,7 +1,5 @@
 (function registerStageManager(global) {
   const {
-    GAME_HEIGHT,
-    GAME_WIDTH,
     MINION_STAGE_DURATION,
     MINION_TARGET_WAVES,
     MINION_WAVE_INTERVAL_MAX,
@@ -9,10 +7,11 @@
   } = global.Config;
 
   class StageManager {
-    constructor(enemyManager, bossController, bulletManager) {
+    constructor(enemyManager, bossController, bulletManager, dialogueManager) {
       this.enemyManager = enemyManager;
       this.bossController = bossController;
       this.bulletManager = bulletManager;
+      this.dialogueManager = dialogueManager;
       this.difficulty = "easy";
 
       this.reset();
@@ -32,9 +31,58 @@
       this.bannerText = "MINION STAGE";
       this.bannerTimer = 1.8;
       this.clearTimer = 0;
+      this.introDialogueDone = false;
+      this.bossDialogueDone = false;
+      this.pauseForDialogue = false;
+    }
+
+    beginIntroDialogue() {
+      if (this.introDialogueDone) {
+        return false;
+      }
+      this.pauseForDialogue = true;
+      this.dialogueManager.start(
+        [
+          { name: "哈哈哈哈", text: "哈哈哈哈哈哈哈" },
+          { name: "哈哈哈哈", text: "哈哈哈哈哈哈哈" },
+        ],
+        () => {
+          this.introDialogueDone = true;
+          this.pauseForDialogue = false;
+        }
+      );
+      return true;
+    }
+
+    beginBossDialogue() {
+      if (this.bossDialogueDone) {
+        return false;
+      }
+      this.pauseForDialogue = true;
+      this.dialogueManager.start(
+        [
+          { name: "哈哈哈哈", text: "哈哈哈哈哈哈哈" },
+          { name: "哈哈哈哈", text: "哈哈哈哈哈哈哈" },
+        ],
+        () => {
+          this.bossDialogueDone = true;
+          this.pauseForDialogue = false;
+          this.state = "BOSS_ENTRY";
+          this.bannerText = "BOSS APPROACHING";
+          this.bannerTimer = 2;
+          this.enemyManager.clearAll();
+          this.bulletManager.clearEnemyBullets();
+          this.bossController.activateEntry();
+        }
+      );
+      return true;
     }
 
     update(deltaTime, player) {
+      if (this.pauseForDialogue) {
+        return;
+      }
+
       this.bannerTimer = Math.max(0, this.bannerTimer - deltaTime);
 
       if (this.state === "MINION_STAGE") {
@@ -90,17 +138,17 @@
     }
 
     enterBossStage() {
-      this.state = "BOSS_ENTRY";
-      this.bannerText = "BOSS APPROACHING";
-      this.bannerTimer = 2;
-      this.enemyManager.clearAll();
-      this.bulletManager.clearEnemyBullets();
-      this.bossController.activateEntry();
+      if (!this.bossDialogueDone) {
+        this.beginBossDialogue();
+      }
     }
 
     randomWaveInterval() {
       const base =
         MINION_WAVE_INTERVAL_MIN + Math.random() * (MINION_WAVE_INTERVAL_MAX - MINION_WAVE_INTERVAL_MIN);
+      if (this.difficulty === "lunatic") {
+        return base * 0.4;
+      }
       return this.difficulty === "hard" ? base * 0.6 : base;
     }
 
@@ -146,7 +194,7 @@
       ctx.textBaseline = "middle";
       ctx.fillStyle = `rgba(255, 245, 228, ${alpha})`;
       ctx.font = "italic 34px Georgia";
-      ctx.fillText(this.bannerText, GAME_WIDTH * 0.5, GAME_HEIGHT * 0.18);
+      ctx.fillText(this.bannerText, 300, 144);
       ctx.restore();
     }
   }
