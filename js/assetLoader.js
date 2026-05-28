@@ -63,7 +63,7 @@
         const g = data[i + 1];
         const b = data[i + 2];
 
-        const isWhiteBackdrop = r > 236 && g > 236 && b > 236;
+        const isWhiteBackdrop = r > 228 && g > 228 && b > 228;
         const isGuideBlue = r < 120 && g > 140 && b > 190;
 
         if (isWhiteBackdrop || isGuideBlue) {

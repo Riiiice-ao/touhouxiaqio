@@ -13,10 +13,16 @@
 
   const BOSS_FRAMES = {
     idle: [
-      { x: 1260, y: 318, w: 228, h: 326 },
-      { x: 1512, y: 318, w: 228, h: 326 },
-      { x: 1764, y: 318, w: 228, h: 326 },
-      { x: 2016, y: 318, w: 228, h: 326 },
+      { x: 1272, y: 324, w: 204, h: 308 },
+      { x: 1524, y: 324, w: 204, h: 308 },
+      { x: 1776, y: 324, w: 204, h: 308 },
+      { x: 2028, y: 324, w: 204, h: 308 },
+    ],
+    side: [
+      { x: 1276, y: 716, w: 210, h: 320 },
+      { x: 1528, y: 716, w: 210, h: 320 },
+      { x: 1780, y: 716, w: 210, h: 320 },
+      { x: 2032, y: 716, w: 210, h: 320 },
     ],
   };
 
@@ -68,6 +74,9 @@
       this.randomTimer = 0.95;
       this.spriteFrame = 0;
       this.spriteTimer = 0;
+      this.spriteState = "idle";
+      this.facingDirection = 1;
+      this.prevX = this.x;
       global.HealthSystem.resetEntity(this, Math.floor(BOSS_MAX_HEALTH * this.difficultyHpMultiplier));
     }
 
@@ -118,9 +127,11 @@
       this.splitTimer -= deltaTime;
       this.randomTimer -= deltaTime;
       this.spriteTimer += deltaTime;
+      this.updateSpriteState();
       if (this.spriteTimer >= 0.14) {
         this.spriteTimer = 0;
-        this.spriteFrame = (this.spriteFrame + 1) % BOSS_FRAMES.idle.length;
+        const activeFrames = this.spriteState === "side" ? BOSS_FRAMES.side : BOSS_FRAMES.idle;
+        this.spriteFrame = (this.spriteFrame + 1) % activeFrames.length;
       }
 
       if (this.phase === 1) {
@@ -174,6 +185,17 @@
     chooseNextDestination() {
       const candidates = this.lanePositions.filter((position) => Math.abs(position - this.x) > 30);
       return candidates[Math.floor(Math.random() * candidates.length)] ?? this.targetX;
+    }
+
+    updateSpriteState() {
+      const deltaX = this.x - this.prevX;
+      if (Math.abs(deltaX) > 0.3) {
+        this.spriteState = "side";
+        this.facingDirection = deltaX > 0 ? 1 : -1;
+      } else {
+        this.spriteState = "idle";
+      }
+      this.prevX = this.x;
     }
 
     updatePhaseOnePatterns(player) {
@@ -346,19 +368,36 @@
       const sprite = this.assetLoader.get("boss");
       if (sprite) {
         ctx.save();
-        const frame = BOSS_FRAMES.idle[this.spriteFrame];
+        const frames = this.spriteState === "side" ? BOSS_FRAMES.side : BOSS_FRAMES.idle;
+        const frame = frames[this.spriteFrame % frames.length];
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(
-          sprite,
-          frame.x,
-          frame.y,
-          frame.w,
-          frame.h,
-          this.x - 46,
-          this.y - 54,
-          92,
-          112
-        );
+        if (this.spriteState === "side" && this.facingDirection > 0) {
+          ctx.translate(this.x, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(
+            sprite,
+            frame.x,
+            frame.y,
+            frame.w,
+            frame.h,
+            -24,
+            this.y - 32,
+            48,
+            64
+          );
+        } else {
+          ctx.drawImage(
+            sprite,
+            frame.x,
+            frame.y,
+            frame.w,
+            frame.h,
+            this.x - 24,
+            this.y - 32,
+            48,
+            64
+          );
+        }
         ctx.restore();
         return;
       }

@@ -24,22 +24,22 @@
 
   const PLAYER_FRAMES = {
     idle: [
-      { x: 214, y: 320, w: 226, h: 328 },
-      { x: 472, y: 320, w: 226, h: 328 },
-      { x: 730, y: 320, w: 226, h: 328 },
-      { x: 988, y: 320, w: 226, h: 328 },
+      { x: 220, y: 326, w: 212, h: 312 },
+      { x: 478, y: 326, w: 212, h: 312 },
+      { x: 736, y: 326, w: 212, h: 312 },
+      { x: 994, y: 326, w: 212, h: 312 },
     ],
     turning: [
-      { x: 214, y: 1088, w: 226, h: 346 },
-      { x: 472, y: 1088, w: 226, h: 346 },
-      { x: 730, y: 1088, w: 226, h: 346 },
-      { x: 988, y: 1088, w: 226, h: 346 },
+      { x: 220, y: 1096, w: 212, h: 326 },
+      { x: 478, y: 1096, w: 212, h: 326 },
+      { x: 736, y: 1096, w: 212, h: 326 },
+      { x: 994, y: 1096, w: 212, h: 326 },
     ],
     side: [
-      { x: 1278, y: 710, w: 214, h: 344 },
-      { x: 1530, y: 710, w: 214, h: 344 },
-      { x: 1782, y: 710, w: 214, h: 344 },
-      { x: 2034, y: 710, w: 214, h: 344 },
+      { x: 1288, y: 720, w: 196, h: 324 },
+      { x: 1540, y: 720, w: 196, h: 324 },
+      { x: 1792, y: 720, w: 196, h: 324 },
+      { x: 2044, y: 720, w: 196, h: 324 },
     ],
   };
 
@@ -83,8 +83,8 @@
       this.animationFrame = 0;
       this.facingDirection = 1;
       this.idleSequence = [0, 1, 2, 3, 2, 1];
-      this.spriteRenderWidth = 58;
-      this.spriteRenderHeight = 82;
+      this.spriteRenderWidth = 40;
+      this.spriteRenderHeight = 54;
     }
 
     update(deltaTime) {
@@ -428,7 +428,7 @@
 
     renderSprite(ctx, spriteSheet) {
       const frame = this.getCurrentFrameRect();
-      const drawY = this.y - this.spriteRenderHeight * 0.60;
+      const drawY = this.y - this.spriteRenderHeight * 0.58;
 
       ctx.imageSmoothingEnabled = false;
 
