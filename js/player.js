@@ -14,12 +14,42 @@
     MAX_LIFE_STOCK,
   } = global.Config;
 
+  const AnimationState = {
+    IDLE: "IDLE",
+    TURNING_LEFT: "TURNING_LEFT",
+    SIDE_LEFT: "SIDE_LEFT",
+    TURNING_RIGHT: "TURNING_RIGHT",
+    SIDE_RIGHT: "SIDE_RIGHT",
+  };
+
+  const PLAYER_FRAMES = {
+    idle: [
+      { x: 214, y: 320, w: 226, h: 328 },
+      { x: 472, y: 320, w: 226, h: 328 },
+      { x: 730, y: 320, w: 226, h: 328 },
+      { x: 988, y: 320, w: 226, h: 328 },
+    ],
+    turning: [
+      { x: 214, y: 1088, w: 226, h: 346 },
+      { x: 472, y: 1088, w: 226, h: 346 },
+      { x: 730, y: 1088, w: 226, h: 346 },
+      { x: 988, y: 1088, w: 226, h: 346 },
+    ],
+    side: [
+      { x: 1278, y: 710, w: 214, h: 344 },
+      { x: 1530, y: 710, w: 214, h: 344 },
+      { x: 1782, y: 710, w: 214, h: 344 },
+      { x: 2034, y: 710, w: 214, h: 344 },
+    ],
+  };
+
   class Player {
-    constructor(input, bulletManager, hud, bombEffect) {
+    constructor(input, bulletManager, hud, bombEffect, assetLoader) {
       this.input = input;
       this.bulletManager = bulletManager;
       this.hud = hud;
       this.bombEffect = bombEffect;
+      this.assetLoader = assetLoader;
 
       this.x = GAME_WIDTH * 0.5;
       this.y = GAME_HEIGHT - 96;
@@ -47,6 +77,14 @@
       this.deathbombWindow = PLAYER_DEATH_WINDOW;
       this.isDying = false;
       this.fatalBulletSlot = -1;
+
+      this.animationState = AnimationState.IDLE;
+      this.animationTimer = 0;
+      this.animationFrame = 0;
+      this.facingDirection = 1;
+      this.idleSequence = [0, 1, 2, 3, 2, 1];
+      this.spriteRenderWidth = 58;
+      this.spriteRenderHeight = 82;
     }
 
     update(deltaTime) {
@@ -70,6 +108,7 @@
       this.handleMovement(deltaTime);
       this.handleAttack(deltaTime);
       this.handleBombInput();
+      this.updateAnimationState(deltaTime);
     }
 
     handleMovement(deltaTime) {
@@ -248,24 +287,110 @@
       this.deathbombTimer = 0;
       this.isDying = false;
       this.fatalBulletSlot = -1;
+      this.animationState = AnimationState.IDLE;
+      this.animationTimer = 0;
+      this.animationFrame = 0;
+      this.facingDirection = 1;
       this.restoreLivesAndBombs();
       this.hud.reset(this);
     }
 
+    updateAnimationState(deltaTime) {
+      const leftHeld = this.input.isDown("ArrowLeft");
+      const rightHeld = this.input.isDown("ArrowRight");
+      const playbackSpeed = this.isFocusMode ? 0.55 : 1;
+      this.animationTimer += deltaTime * playbackSpeed;
+      const frameStep = 1 / 10;
+
+      if (leftHeld && !rightHeld) {
+        this.facingDirection = -1;
+        if (this.animationState === AnimationState.IDLE) {
+          this.animationState = AnimationState.TURNING_LEFT;
+          this.animationFrame = 0;
+          this.animationTimer = 0;
+        } else if (this.animationState === AnimationState.TURNING_LEFT) {
+          if (this.animationTimer >= frameStep) {
+            this.animationTimer = 0;
+            this.animationFrame += 1;
+            if (this.animationFrame >= PLAYER_FRAMES.turning.length - 1) {
+              this.animationState = AnimationState.SIDE_LEFT;
+              this.animationFrame = 0;
+            }
+          }
+        } else if (this.animationState === AnimationState.SIDE_LEFT) {
+          if (this.animationTimer >= frameStep) {
+            this.animationTimer = 0;
+            this.animationFrame = (this.animationFrame + 1) % PLAYER_FRAMES.side.length;
+          }
+        }
+        return;
+      }
+
+      if (rightHeld && !leftHeld) {
+        this.facingDirection = 1;
+        if (this.animationState === AnimationState.IDLE) {
+          this.animationState = AnimationState.TURNING_RIGHT;
+          this.animationFrame = 0;
+          this.animationTimer = 0;
+        } else if (this.animationState === AnimationState.TURNING_RIGHT) {
+          if (this.animationTimer >= frameStep) {
+            this.animationTimer = 0;
+            this.animationFrame += 1;
+            if (this.animationFrame >= PLAYER_FRAMES.turning.length - 1) {
+              this.animationState = AnimationState.SIDE_RIGHT;
+              this.animationFrame = 0;
+            }
+          }
+        } else if (this.animationState === AnimationState.SIDE_RIGHT) {
+          if (this.animationTimer >= frameStep) {
+            this.animationTimer = 0;
+            this.animationFrame = (this.animationFrame + 1) % PLAYER_FRAMES.side.length;
+          }
+        }
+        return;
+      }
+
+      if (this.animationState === AnimationState.IDLE) {
+        if (this.animationTimer >= 1 / 9) {
+          this.animationTimer = 0;
+          this.animationFrame = (this.animationFrame + 1) % this.idleSequence.length;
+        }
+        return;
+      }
+
+      if (this.animationState === AnimationState.SIDE_LEFT || this.animationState === AnimationState.SIDE_RIGHT) {
+        this.animationState = this.animationState === AnimationState.SIDE_LEFT
+          ? AnimationState.TURNING_LEFT
+          : AnimationState.TURNING_RIGHT;
+        this.animationFrame = PLAYER_FRAMES.turning.length - 1;
+        this.animationTimer = 0;
+        return;
+      }
+
+      if (this.animationTimer >= frameStep) {
+        this.animationTimer = 0;
+        this.animationFrame -= 1;
+        if (this.animationFrame <= 0) {
+          this.animationState = AnimationState.IDLE;
+          this.animationFrame = 0;
+        }
+      }
+    }
+
     render(ctx) {
+      const spriteSheet = this.assetLoader.get("playerSpriteSheet");
+
       ctx.save();
 
       if (this.invincibleTimer > 0) {
         ctx.globalAlpha = 0.58 + Math.sin(performance.now() * 0.02) * 0.2;
       }
 
-      ctx.fillStyle = "#f8f5ff";
-      ctx.beginPath();
-      ctx.moveTo(this.x, this.y - 16);
-      ctx.lineTo(this.x - 12, this.y + 12);
-      ctx.lineTo(this.x + 12, this.y + 12);
-      ctx.closePath();
-      ctx.fill();
+      if (spriteSheet) {
+        this.renderSprite(ctx, spriteSheet);
+      } else {
+        this.renderFallbackShip(ctx);
+      }
 
       ctx.strokeStyle = this.isFocusMode ? "rgba(255, 168, 125, 0.65)" : "rgba(154, 204, 255, 0.28)";
       ctx.lineWidth = 1.5;
@@ -276,7 +401,7 @@
       if (this.isFocusMode) {
         ctx.fillStyle = "#ff4f5c";
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.deathRadius, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y - 4, this.deathRadius, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -290,7 +415,78 @@
 
       ctx.restore();
     }
+
+    renderFallbackShip(ctx) {
+      ctx.fillStyle = "#f8f5ff";
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y - 16);
+      ctx.lineTo(this.x - 12, this.y + 12);
+      ctx.lineTo(this.x + 12, this.y + 12);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    renderSprite(ctx, spriteSheet) {
+      const frame = this.getCurrentFrameRect();
+      const drawY = this.y - this.spriteRenderHeight * 0.60;
+
+      ctx.imageSmoothingEnabled = false;
+
+      if (frame.flipX) {
+        ctx.save();
+        ctx.translate(this.x, 0);
+        ctx.scale(-1, 1);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+          spriteSheet,
+          frame.x,
+          frame.y,
+          frame.w,
+          frame.h,
+          -this.spriteRenderWidth * 0.5,
+          drawY,
+          this.spriteRenderWidth,
+          this.spriteRenderHeight
+        );
+        ctx.restore();
+        return;
+      }
+
+      ctx.drawImage(
+        spriteSheet,
+        frame.x,
+        frame.y,
+        frame.w,
+        frame.h,
+        this.x - this.spriteRenderWidth * 0.5,
+        drawY,
+        this.spriteRenderWidth,
+        this.spriteRenderHeight
+      );
+    }
+
+    getCurrentFrameRect() {
+      if (this.animationState === AnimationState.IDLE) {
+        const frameIndex = this.idleSequence[this.animationFrame % this.idleSequence.length];
+        return { ...PLAYER_FRAMES.idle[frameIndex], flipX: false };
+      }
+
+      if (this.animationState === AnimationState.TURNING_LEFT) {
+        return { ...PLAYER_FRAMES.turning[this.animationFrame], flipX: false };
+      }
+
+      if (this.animationState === AnimationState.SIDE_LEFT) {
+        return { ...PLAYER_FRAMES.side[this.animationFrame], flipX: false };
+      }
+
+      if (this.animationState === AnimationState.TURNING_RIGHT) {
+        return { ...PLAYER_FRAMES.turning[this.animationFrame], flipX: true };
+      }
+
+      return { ...PLAYER_FRAMES.side[this.animationFrame], flipX: true };
+    }
   }
 
   global.Player = Player;
+  global.PlayerAnimationState = AnimationState;
 })(window.XTouhouWeb);

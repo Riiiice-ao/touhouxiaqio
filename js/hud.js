@@ -5,6 +5,7 @@
       this.grazeValue = document.getElementById("grazeValue");
       this.bombValue = document.getElementById("bombValue");
       this.lifeValue = document.getElementById("lifeValue");
+      this.difficultyValue = document.getElementById("difficultyValue");
     }
 
     reset(player) {
@@ -12,6 +13,15 @@
       this.setGraze(player.graze);
       this.setBomb(player.bombStock);
       this.setLife(player.life);
+    }
+
+    setDifficulty(difficulty) {
+      const map = {
+        easy: "EASY",
+        hard: "HARD",
+        lunatic: "LUNATIC",
+      };
+      this.difficultyValue.textContent = map[difficulty] ?? "----";
     }
 
     setScore(score) {

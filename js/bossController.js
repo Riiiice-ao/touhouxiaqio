@@ -11,23 +11,35 @@
     GAME_WIDTH,
   } = global.Config;
 
+  const BOSS_FRAMES = {
+    idle: [
+      { x: 1260, y: 318, w: 228, h: 326 },
+      { x: 1512, y: 318, w: 228, h: 326 },
+      { x: 1764, y: 318, w: 228, h: 326 },
+      { x: 2016, y: 318, w: 228, h: 326 },
+    ],
+  };
+
   class BossController {
-    constructor(emitter, bulletManager, bombEffect) {
+    constructor(emitter, bulletManager, bombEffect, assetLoader) {
       this.emitter = emitter;
       this.bulletManager = bulletManager;
       this.bombEffect = bombEffect;
+      this.assetLoader = assetLoader;
       this.radius = 30;
       this.entrySpeed = 120;
       this.targetX = BOSS_ENTRY_X;
       this.targetY = BOSS_ENTRY_Y;
       this.lanePositions = [140, 300, 460];
       this.difficulty = "easy";
+      this.difficultyHpMultiplier = 1;
 
       this.reset();
     }
 
     setDifficulty(difficulty) {
       this.difficulty = difficulty;
+      this.difficultyHpMultiplier = difficulty === "lunatic" ? 1.5 : 1;
     }
 
     reset() {
@@ -54,7 +66,9 @@
       this.followTimer = 0.45;
       this.splitTimer = 0.8;
       this.randomTimer = 0.95;
-      global.HealthSystem.resetEntity(this, BOSS_MAX_HEALTH);
+      this.spriteFrame = 0;
+      this.spriteTimer = 0;
+      global.HealthSystem.resetEntity(this, Math.floor(BOSS_MAX_HEALTH * this.difficultyHpMultiplier));
     }
 
     activateEntry() {
@@ -103,6 +117,11 @@
       this.followTimer -= deltaTime;
       this.splitTimer -= deltaTime;
       this.randomTimer -= deltaTime;
+      this.spriteTimer += deltaTime;
+      if (this.spriteTimer >= 0.14) {
+        this.spriteTimer = 0;
+        this.spriteFrame = (this.spriteFrame + 1) % BOSS_FRAMES.idle.length;
+      }
 
       if (this.phase === 1) {
         this.updatePhaseOnePatterns(player);
@@ -158,68 +177,96 @@
     }
 
     updatePhaseOnePatterns(player) {
-      const hard = this.difficulty === "hard";
+      const hard = this.difficulty === "hard" || this.difficulty === "lunatic";
+      const lunatic = this.difficulty === "lunatic";
 
       if (this.waveTimer <= 0) {
         const baseInterval = this.moveState === "stopped" ? 0.26 : 0.52;
-        this.waveTimer += hard ? baseInterval * 0.76 : baseInterval;
+        const multiplier = lunatic ? 0.58 : hard ? 0.76 : 1;
+        this.waveTimer += baseInterval * multiplier;
         const spread = this.moveState === "stopped" ? 145 : 92;
-        const ways = this.moveState === "stopped" ? (hard ? 15 : 13) : hard ? 11 : 9;
-        this.emitter.fireNWay(this.x, this.y, ways, spread, 170, 90, 6, "#ffd37e");
+        const ways = this.moveState === "stopped" ? (lunatic ? 17 : hard ? 15 : 13) : lunatic ? 13 : hard ? 11 : 9;
+        this.emitter.fireNWay(this.x, this.y, ways, spread, lunatic ? 195 : 170, 90, 6, "#ffd37e");
       }
 
       if (this.aimedTimer <= 0) {
-        this.aimedTimer += hard ? 1.08 : 1.45;
-        this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, hard ? 5 : 3, 22, 198, 5, "#9fd5ff");
+        this.aimedTimer += lunatic ? 0.78 : hard ? 1.08 : 1.45;
+        this.emitter.fireAimedNWay(
+          this.x,
+          this.y,
+          player.x,
+          player.y,
+          lunatic ? 7 : hard ? 5 : 3,
+          22,
+          lunatic ? 226 : 198,
+          5,
+          "#9fd5ff"
+        );
       }
 
-      const spiralStep = hard ? 0.04 : 0.05;
+      const spiralStep = lunatic ? 0.032 : hard ? 0.04 : 0.05;
       while (this.spiralTimer >= spiralStep) {
         this.spiralTimer -= spiralStep;
         this.spiralAngle += this.moveState === "stopped" ? 18 : 12;
-        this.emitter.fireSpiralPair(this.x, this.y, this.spiralAngle, 192, 5, "#ffa46d", "#ff6b83");
+        this.emitter.fireSpiralPair(this.x, this.y, this.spiralAngle, lunatic ? 214 : 192, 5, "#ffa46d", "#ff6b83");
       }
     }
 
     updatePhaseTwoPatterns(player) {
-      const hard = this.difficulty === "hard";
+      const hard = this.difficulty === "hard" || this.difficulty === "lunatic";
+      const lunatic = this.difficulty === "lunatic";
 
       if (this.moveState === "moving") {
         if (this.followTimer <= 0) {
-          this.followTimer += hard ? 0.38 : 0.5;
+          this.followTimer += lunatic ? 0.28 : hard ? 0.38 : 0.5;
           this.emitter.fireRetargetFollower(this.x, this.y, player.x, player.y);
+          if (lunatic) {
+            this.emitter.fireRetargetFollower(this.x - 18, this.y + 10, player.x, player.y);
+            this.emitter.fireRetargetFollower(this.x + 18, this.y + 10, player.x, player.y);
+          }
         }
         return;
       }
 
       if (this.splitTimer <= 0) {
-        this.splitTimer += hard ? 0.64 : 0.82;
+        this.splitTimer += lunatic ? 0.5 : hard ? 0.64 : 0.82;
         this.emitter.fireSplitBurstMother(this.x - 32, this.y + 12, 98);
         this.emitter.fireSplitBurstMother(this.x + 32, this.y + 12, 82);
         if (hard) {
           this.emitter.fireSplitBurstMother(this.x, this.y + 4, 90);
         }
+        if (lunatic) {
+          this.emitter.fireSplitBurstMother(this.x - 72, this.y + 8, 108);
+          this.emitter.fireSplitBurstMother(this.x + 72, this.y + 8, 72);
+        }
       }
     }
 
     updatePhaseThreePatterns(player) {
-      const hard = this.difficulty === "hard";
+      const hard = this.difficulty === "hard" || this.difficulty === "lunatic";
+      const lunatic = this.difficulty === "lunatic";
 
       if (this.moveState === "moving") {
         if (this.followTimer <= 0) {
-          this.followTimer += hard ? 0.34 : 0.42;
+          this.followTimer += lunatic ? 0.24 : hard ? 0.34 : 0.42;
           this.emitter.fireRetargetFollower(this.x, this.y, player.x, player.y);
+          if (lunatic) {
+            this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 5, 16, 240, 5, "#53ffcf");
+          }
         }
         return;
       }
 
       if (this.randomTimer <= 0) {
-        this.randomTimer += hard ? 0.82 : 1.04;
+        this.randomTimer += lunatic ? 0.62 : hard ? 0.82 : 1.04;
         const startAngle = Math.random() * 360;
-        this.emitter.fireDelayedRandomRing(this.x, this.y, hard ? 16 : 12, 210, startAngle);
+        this.emitter.fireDelayedRandomRing(this.x, this.y, lunatic ? 20 : hard ? 16 : 12, lunatic ? 235 : 210, startAngle);
         if (hard) {
           this.emitter.fireSplitBurstMother(this.x - 48, this.y + 10, 102);
           this.emitter.fireSplitBurstMother(this.x + 48, this.y + 10, 78);
+        }
+        if (lunatic) {
+          this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 7, 26, 250, 6, "#00ff55");
         }
       }
     }
@@ -296,8 +343,27 @@
         return;
       }
 
-      ctx.save();
+      const sprite = this.assetLoader.get("boss");
+      if (sprite) {
+        ctx.save();
+        const frame = BOSS_FRAMES.idle[this.spriteFrame];
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+          sprite,
+          frame.x,
+          frame.y,
+          frame.w,
+          frame.h,
+          this.x - 46,
+          this.y - 54,
+          92,
+          112
+        );
+        ctx.restore();
+        return;
+      }
 
+      ctx.save();
       const bodyGlow = ctx.createRadialGradient(this.x, this.y, 8, this.x, this.y, 40);
       bodyGlow.addColorStop(0, "#fff8fc");
       bodyGlow.addColorStop(0.5, "#ffc7d9");
@@ -306,13 +372,11 @@
       ctx.beginPath();
       ctx.arc(this.x, this.y, 24, 0, Math.PI * 2);
       ctx.fill();
-
       ctx.strokeStyle = "rgba(255,255,255,0.6)";
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.arc(this.x, this.y, 36, 0, Math.PI * 2);
       ctx.stroke();
-
       ctx.restore();
     }
 
@@ -328,7 +392,6 @@
       const ratio = global.HealthSystem.getRatio(this);
 
       ctx.save();
-
       ctx.fillStyle = "rgba(18, 8, 14, 0.74)";
       ctx.fillRect(x - 8, y - 8, width + 16, height + 16);
 
@@ -355,7 +418,6 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
       ctx.fillText(`${this.phaseName}  HP`, GAME_WIDTH * 0.5, y - 4);
-
       ctx.restore();
     }
   }

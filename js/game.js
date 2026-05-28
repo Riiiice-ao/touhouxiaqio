@@ -9,21 +9,25 @@
   const input = new global.InputController();
   const hud = new global.Hud();
   const ui = new global.UiManager();
+  const assetLoader = new global.AssetLoader();
   const bulletManager = new global.BulletManager();
   const bombEffect = new global.BombEffect();
   const emitter = new global.Emitter(bulletManager);
-  const enemyManager = new global.EnemyManager(emitter);
-  const bossController = new global.BossController(emitter, bulletManager, bombEffect);
+  const enemyManager = new global.EnemyManager(emitter, assetLoader);
+  const bossController = new global.BossController(emitter, bulletManager, bombEffect, assetLoader);
   const stageManager = new global.StageManager(enemyManager, bossController, bulletManager);
-  const player = new global.Player(input, bulletManager, hud, bombEffect);
+  const player = new global.Player(input, bulletManager, hud, bombEffect, assetLoader);
 
   const gameState = {
     currentDifficulty: null,
     scene: "menu",
     isPaused: false,
+    assetsReady: false,
+    backgroundScroll: 0,
   };
 
   hud.reset(player);
+  hud.setDifficulty(null);
 
   ui.bind({
     onSelectDifficulty: startGame,
@@ -36,6 +40,14 @@
   });
 
   ui.showStartMenu();
+  ui.setLoadingState(0, Object.keys(assetLoader.assetMap).length);
+
+  assetLoader.loadAll((loadedCount, totalCount) => {
+    ui.setLoadingState(loadedCount, totalCount);
+    if (loadedCount >= totalCount) {
+      gameState.assetsReady = true;
+    }
+  });
 
   let lastTime = performance.now();
 
@@ -51,6 +63,10 @@
   }
 
   function startGame(difficulty) {
+    if (!gameState.assetsReady) {
+      return;
+    }
+
     gameState.currentDifficulty = difficulty;
     gameState.scene = "playing";
     gameState.isPaused = false;
@@ -61,11 +77,14 @@
   function resetRunState() {
     bulletManager.clearEnemyBullets();
     enemyManager.clearAll();
+    bossController.setDifficulty(gameState.currentDifficulty ?? "easy");
     bossController.reset();
     stageManager.setDifficulty(gameState.currentDifficulty ?? "easy");
     stageManager.reset();
     player.resetRunState();
     hud.reset(player);
+    hud.setDifficulty(gameState.currentDifficulty);
+    gameState.backgroundScroll = 0;
   }
 
   function openPauseMenu() {
@@ -109,7 +128,14 @@
   function endGameToScoreBoard() {
     gameState.scene = "score";
     gameState.isPaused = true;
-    ui.showScoreBoard(buildScoreResult());
+    ui.showScoreBoard(buildScoreResult(false));
+  }
+
+  function showGameClearBoard() {
+    gameState.scene = "score";
+    gameState.isPaused = true;
+    bulletManager.clearEnemyBullets();
+    ui.showScoreBoard(buildScoreResult(true));
   }
 
   function backToMainMenu() {
@@ -121,26 +147,54 @@
     bossController.reset();
     stageManager.reset();
     player.resetRunState();
+    hud.reset(player);
+    hud.setDifficulty(null);
     ui.showStartMenu();
   }
 
-  function buildScoreResult() {
+  function buildScoreResult(isClear) {
+    const difficultyText = getDifficultyLabel(gameState.currentDifficulty);
+    const baseScore = player.score;
+    const finalScore = isClear ? baseScore + getClearBonus() : baseScore;
+
     return {
-      difficulty: gameState.currentDifficulty === "hard" ? "Hard" : "Easy",
-      score: String(player.score).padStart(7, "0"),
+      mode: isClear ? "Game Clear" : "Game Over",
+      headline: isClear ? "Clear Result" : "Battle Result",
+      difficulty: difficultyText,
+      score: String(finalScore).padStart(7, "0"),
       graze: String(player.maxGraze).padStart(4, "0"),
-      title: getTitleByScore(player.score),
+      title: getTitleByScore(finalScore, isClear),
     };
   }
 
-  function getTitleByScore(score) {
-    if (score >= 1000000) {
-      return "Shrine Maiden";
+  function getDifficultyLabel(difficulty) {
+    if (difficulty === "lunatic") {
+      return "Lunatic";
     }
-    if (score >= 500000) {
-      return "Scarlet Hunter";
+    if (difficulty === "hard") {
+      return "Hard";
     }
-    if (score >= 100000) {
+    return "Easy";
+  }
+
+  function getClearBonus() {
+    const lifeBonus = player.life * 100000;
+    const difficultyBonus = gameState.currentDifficulty === "lunatic"
+      ? 1000000
+      : gameState.currentDifficulty === "hard"
+        ? 200000
+        : 0;
+    return lifeBonus + difficultyBonus;
+  }
+
+  function getTitleByScore(score, isClear) {
+    if (gameState.currentDifficulty === "lunatic" && isClear && player.life === player.maxLifeStock) {
+      return "Living Myth";
+    }
+    if (score >= 1200000) {
+      return "Ace Cowboy";
+    }
+    if (score >= 700000) {
       return "Danmaku Adept";
     }
     return "Beginner";
@@ -151,15 +205,28 @@
       return;
     }
 
+    updateBackground(deltaTime);
     player.update(deltaTime);
     stageManager.update(deltaTime, player);
     bulletManager.update(deltaTime, player, enemyManager, bossController);
     bombEffect.update(deltaTime, bulletManager);
 
+    if (stageManager.state === "CLEAR") {
+      showGameClearBoard();
+      return;
+    }
+
     if (player.life <= 0 && !player.isDying) {
       gameState.scene = "gameover";
       gameState.isPaused = true;
       ui.showGameOverMenu();
+    }
+  }
+
+  function updateBackground(deltaTime) {
+    gameState.backgroundScroll += 80 * deltaTime;
+    if (gameState.backgroundScroll >= GAME_HEIGHT) {
+      gameState.backgroundScroll -= GAME_HEIGHT;
     }
   }
 
@@ -175,6 +242,12 @@
   function drawBackground(now) {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
+    const bgImage = assetLoader.get("bgLayer");
+    if (bgImage) {
+      drawScrollingBackground(bgImage);
+      return;
+    }
+
     const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
     gradient.addColorStop(0, "#101a30");
     gradient.addColorStop(0.55, "#15122b");
@@ -185,7 +258,7 @@
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.07)";
     ctx.lineWidth = 1;
-    const scroll = (now * 0.08) % 40;
+    const scroll = (now * 0.08 + gameState.backgroundScroll) % 40;
 
     for (let y = -40; y < GAME_HEIGHT + 40; y += 40) {
       ctx.beginPath();
@@ -195,6 +268,15 @@
     }
 
     ctx.restore();
+  }
+
+  function drawScrollingBackground(image) {
+    const drawHeight = GAME_HEIGHT;
+    const drawWidth = GAME_WIDTH;
+    const offsetY = gameState.backgroundScroll;
+
+    ctx.drawImage(image, 0, -offsetY, drawWidth, drawHeight);
+    ctx.drawImage(image, 0, drawHeight - offsetY, drawWidth, drawHeight);
   }
 
   requestAnimationFrame(gameLoop);

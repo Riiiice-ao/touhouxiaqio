@@ -4,9 +4,16 @@
   const TYPE_B = 2;
   const TYPE_C = 3;
 
+  const ENEMY_FRAMES = {
+    A: { x: 14, y: 12, w: 240, h: 280 },
+    B: { x: 284, y: 10, w: 236, h: 282 },
+    C: { x: 20, y: 362, w: 224, h: 296 },
+  };
+
   class EnemyManager {
-    constructor(emitter) {
+    constructor(emitter, assetLoader) {
       this.emitter = emitter;
+      this.assetLoader = assetLoader;
       this.pool = this.createPool(MAX_ENEMIES);
       this.difficulty = "easy";
     }
@@ -82,13 +89,14 @@
             { x: 64, y: 48 },
           ];
 
-      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : 1;
+      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : this.difficulty === "lunatic" ? 1.4 : 1;
+      const hpMultiplier = this.difficulty === "lunatic" ? 3 : this.difficulty === "hard" ? 2 : 1;
 
       for (let i = 0; i < offsets.length; i += 1) {
         const offset = offsets[i];
         this.spawnEnemy(TYPE_A, originX + offset.x, originY + offset.y, 0, 120 + Math.random() * 28, {
           radius: 14,
-          health: 4,
+          health: 4 * hpMultiplier,
           score: 160,
           attackTimer: 0.55 + Math.random() * 0.35,
           bulletSpeedBonus,
@@ -116,7 +124,8 @@
             { x: 0, y: 72 },
           ];
 
-      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : 1;
+      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : this.difficulty === "lunatic" ? 1.4 : 1;
+      const hpMultiplier = this.difficulty === "lunatic" ? 3 : this.difficulty === "hard" ? 2 : 1;
 
       for (let i = 0; i < offsets.length; i += 1) {
         const offset = offsets[i];
@@ -128,7 +137,7 @@
           56,
           {
             radius: 13,
-            health: 3,
+            health: 3 * hpMultiplier,
             score: 180,
             attackTimer: 0.9 + Math.random() * 0.4,
             direction: xDirection,
@@ -154,13 +163,14 @@
             { x: 42, y: 28 },
           ];
 
-      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : 1;
+      const bulletSpeedBonus = this.difficulty === "hard" ? 1.25 : this.difficulty === "lunatic" ? 1.4 : 1;
+      const hpMultiplier = this.difficulty === "lunatic" ? 3 : this.difficulty === "hard" ? 2 : 1;
 
       for (let i = 0; i < offsets.length; i += 1) {
         const offset = offsets[i];
         this.spawnEnemy(TYPE_C, originX + offset.x, originY + offset.y, 0, 44, {
           radius: 16,
-          health: 5,
+          health: 5 * hpMultiplier,
           score: 240,
           attackTimer: 1.1 + Math.random() * 0.25,
           bulletSpeedBonus,
@@ -367,12 +377,21 @@
 
     render(ctx) {
       const pool = this.pool;
+      const sprite = this.assetLoader.get("enemyA");
 
       for (let i = 0; i < pool.count; i += 1) {
         const slot = pool.activeIndices[i];
         const x = pool.x[slot];
         const y = pool.y[slot];
         const type = pool.type[slot];
+
+        if (sprite) {
+          const frame = type === TYPE_A ? ENEMY_FRAMES.A : type === TYPE_B ? ENEMY_FRAMES.B : ENEMY_FRAMES.C;
+          const renderWidth = type === TYPE_C ? 42 : 38;
+          const renderHeight = type === TYPE_C ? 54 : 50;
+          ctx.drawImage(sprite, frame.x, frame.y, frame.w, frame.h, x - renderWidth * 0.5, y - renderHeight * 0.55, renderWidth, renderHeight);
+          continue;
+        }
 
         if (type === TYPE_A) {
           ctx.fillStyle = "#ff9b6a";

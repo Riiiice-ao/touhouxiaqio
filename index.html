@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>xTouhouXiaQio Web 1</title>
+  <title>Shrimps Danmaku Castle</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -26,6 +26,10 @@
           <span class="hud-label">Life</span>
           <span id="lifeValue">03</span>
         </div>
+        <div class="hud-line">
+          <span class="hud-label">Diff</span>
+          <span id="difficultyValue">----</span>
+        </div>
       </div>
 
       <div class="game-stack">
@@ -33,12 +37,13 @@
 
         <div id="startMenu" class="overlay-screen">
           <div class="overlay-panel title-panel">
-            <p class="eyebrow">Scarlet Curtain</p>
-            <h1>xTouhouXiaQio</h1>
-            <p class="overlay-copy">请选择挑战难度，红魔馆的弹幕帷幕即将展开。</p>
+            <p class="eyebrow">Touhou Tribute</p>
+            <h1>Shrimps Danmaku Castle<br><span class="title-sub">Touhou Xia Qiu Guan</span></h1>
+            <p id="loadingText" class="overlay-copy">Loading assets, please wait...</p>
             <div class="overlay-actions">
-              <button id="easyButton" class="menu-btn menu-btn-easy" type="button">简单难度 Easy</button>
-              <button id="hardButton" class="menu-btn menu-btn-hard" type="button">困难难度 Hard</button>
+              <button id="easyButton" class="menu-btn menu-btn-easy is-disabled" type="button" disabled>Easy</button>
+              <button id="hardButton" class="menu-btn menu-btn-hard is-disabled" type="button" disabled>Hard</button>
+              <button id="lunaticButton" class="menu-btn menu-btn-lunatic is-disabled" type="button" disabled>Lunatic</button>
             </div>
           </div>
         </div>
@@ -46,11 +51,11 @@
         <div id="pauseMenu" class="overlay-screen is-hidden">
           <div class="overlay-panel modal-panel">
             <p class="eyebrow">Pause</p>
-            <h2>游戏已暂停</h2>
-            <p class="overlay-copy">要继续冲击弹幕，还是重整旗鼓重新开始？</p>
+            <h2>Game Paused</h2>
+            <p class="overlay-copy">Resume the raid or reset the current battle.</p>
             <div class="overlay-actions">
-              <button id="resumeButton" class="menu-btn menu-btn-easy" type="button">继续游戏</button>
-              <button id="restartButton" class="menu-btn menu-btn-hard" type="button">确认重新开始</button>
+              <button id="resumeButton" class="menu-btn menu-btn-easy" type="button">Resume</button>
+              <button id="restartButton" class="menu-btn menu-btn-hard" type="button">Restart Run</button>
             </div>
           </div>
         </div>
@@ -58,52 +63,52 @@
         <div id="gameOverMenu" class="overlay-screen is-hidden">
           <div class="overlay-panel modal-panel">
             <p class="eyebrow">Continue?</p>
-            <h2>残机耗尽</h2>
-            <p class="overlay-copy">你要以分数代价复活继续挑战，还是结束本次战斗？</p>
+            <h2>All Lives Lost</h2>
+            <p class="overlay-copy">Continue the battle at a score cost, or end the run here.</p>
             <div class="overlay-actions">
-              <button id="continueButton" class="menu-btn menu-btn-easy" type="button">复活 Continue</button>
-              <button id="endGameButton" class="menu-btn menu-btn-hard" type="button">结束游戏</button>
+              <button id="continueButton" class="menu-btn menu-btn-easy" type="button">Continue</button>
+              <button id="endGameButton" class="menu-btn menu-btn-hard" type="button">Game Over</button>
             </div>
           </div>
         </div>
 
         <div id="scoreBoard" class="overlay-screen is-hidden">
           <div class="overlay-panel score-panel">
-            <p class="eyebrow">Score Board</p>
-            <h2>战果结算</h2>
+            <p id="resultEyebrow" class="eyebrow">Score Board</p>
+            <h2 id="resultHeadline">Result</h2>
             <div class="score-grid">
               <div class="score-row">
-                <span>挑战难度</span>
+                <span>Difficulty</span>
                 <strong id="resultDifficulty">Easy</strong>
               </div>
               <div class="score-row">
-                <span>最终得分</span>
+                <span>Final Score</span>
                 <strong id="resultScore">0000000</strong>
               </div>
               <div class="score-row">
-                <span>最高擦弹</span>
+                <span>Max Graze</span>
                 <strong id="resultGraze">0000</strong>
               </div>
               <div class="score-row">
-                <span>称号评级</span>
-                <strong id="resultTitle">初学者</strong>
+                <span>Title</span>
+                <strong id="resultTitle">Beginner</strong>
               </div>
             </div>
             <div class="overlay-actions">
-              <button id="backToMenuButton" class="menu-btn menu-btn-easy" type="button">回到主菜单</button>
+              <button id="backToMenuButton" class="menu-btn menu-btn-easy" type="button">Back To Menu</button>
             </div>
           </div>
         </div>
       </div>
 
       <aside class="info-card">
-        <h1>xTouhouXiaQio</h1>
-        <button id="pauseButton" class="side-btn" type="button">重新开始 / 菜单</button>
-        <p>方向键移动</p>
-        <p>Z 射击</p>
-        <p>Shift 低速</p>
+        <h1>Shrimps Castle</h1>
+        <button id="pauseButton" class="side-btn" type="button">Restart / Menu</button>
+        <p>Arrow Keys Move</p>
+        <p>Z Shoot</p>
+        <p>Shift Focus</p>
         <p>X Bomb</p>
-        <p class="info-tip">原生 Canvas + 对象池 + 数学碰撞</p>
+        <p class="info-tip">Canvas handles bullets and animation, DOM handles menus and score flow.</p>
       </aside>
     </section>
   </main>
@@ -112,6 +117,7 @@
   <script src="./js/input.js"></script>
   <script src="./js/hud.js"></script>
   <script src="./js/uiManager.js"></script>
+  <script src="./js/assetLoader.js"></script>
   <script src="./js/healthSystem.js"></script>
   <script src="./js/bulletManager.js"></script>
   <script src="./js/emitter.js"></script>
