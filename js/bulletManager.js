@@ -17,9 +17,11 @@
   global.BulletBehavior = BulletBehavior;
 
   class BulletManager {
-    constructor() {
+    constructor(audioManager) {
+      this.audioManager = audioManager;
       this.enemyPool = this.createPool(MAX_BULLETS);
       this.playerPool = this.createPool(MAX_PLAYER_BULLETS);
+      this.globalSpeedScale = 1;
     }
 
     createPool(capacity) {
@@ -98,6 +100,13 @@
     }
 
     update(deltaTime, player, enemyManager, bossController) {
+      const count = this.enemyPool.count;
+      if (count > 420) {
+        this.globalSpeedScale = Math.max(0.45, 1 - (count - 420) / 1600);
+      } else {
+        this.globalSpeedScale = 1;
+      }
+
       this.updateEnemyBullets(deltaTime, player);
       this.updatePlayerBullets(deltaTime, enemyManager, bossController, player);
     }
@@ -119,8 +128,8 @@
           continue;
         }
 
-        pool.x[slot] += pool.vx[slot] * deltaTime;
-        pool.y[slot] += pool.vy[slot] * deltaTime;
+        pool.x[slot] += pool.vx[slot] * deltaTime * this.globalSpeedScale;
+        pool.y[slot] += pool.vy[slot] * deltaTime * this.globalSpeedScale;
 
         if (this.isOutOfBounds(pool.x[slot], pool.y[slot])) {
           this.recycle(pool, slot);
@@ -144,6 +153,9 @@
         if (!pool.grazed[slot] && distance < player.grazeRadius + pool.radius[slot]) {
           pool.grazed[slot] = 1;
           player.triggerGraze();
+          if (this.audioManager) {
+            this.audioManager.playGrazeSfx();
+          }
         }
 
         i += 1;
@@ -243,6 +255,9 @@
           enemyManager &&
           enemyManager.checkBulletHit(pool.x[slot], pool.y[slot], pool.radius[slot], pool.damage[slot], player)
         ) {
+          if (this.audioManager) {
+            this.audioManager.playHitSfx();
+          }
           this.recycle(pool, slot);
           continue;
         }
@@ -251,6 +266,9 @@
           bossController &&
           bossController.checkBulletHit(pool.x[slot], pool.y[slot], pool.radius[slot], pool.damage[slot], player)
         ) {
+          if (this.audioManager) {
+            this.audioManager.playHitSfx();
+          }
           this.recycle(pool, slot);
           continue;
         }
@@ -328,40 +346,55 @@
     }
 
     render(ctx) {
-      this.renderPool(ctx, this.enemyPool);
-      this.renderPool(ctx, this.playerPool);
+      this.renderEnemyPool(ctx);
+      this.renderPlayerPool(ctx);
     }
 
-    renderPool(ctx, pool) {
-      if (pool.count <= 0) {
-        return;
-      }
-
-      let currentColor = "";
-      let hasPath = false;
-
+    renderEnemyPool(ctx) {
+      const pool = this.enemyPool;
       for (let i = 0; i < pool.count; i += 1) {
         const slot = pool.activeIndices[i];
+        const x = pool.x[slot];
+        const y = pool.y[slot];
+        const radius = pool.radius[slot];
         const color = pool.colors[slot];
 
-        if (color !== currentColor) {
-          if (hasPath) {
-            ctx.fill();
-          }
-
-          currentColor = color;
-          ctx.fillStyle = currentColor;
-          ctx.beginPath();
-          hasPath = true;
+        if (color === "#ffd37e" || color === "#ffa46d" || color === "#ff6b83" || color === "#00ff55") {
+          this.drawRosePetal(ctx, x, y, pool.vx[slot], pool.vy[slot], radius + 6, color);
+          continue;
         }
 
-        ctx.moveTo(pool.x[slot] + pool.radius[slot], pool.y[slot]);
-        ctx.arc(pool.x[slot], pool.y[slot], pool.radius[slot], 0, Math.PI * 2);
-      }
-
-      if (hasPath) {
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+
+    renderPlayerPool(ctx) {
+      const pool = this.playerPool;
+      for (let i = 0; i < pool.count; i += 1) {
+        const slot = pool.activeIndices[i];
+        ctx.beginPath();
+        ctx.fillStyle = pool.colors[slot];
+        ctx.arc(pool.x[slot], pool.y[slot], pool.radius[slot], 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    drawRosePetal(ctx, x, y, vx, vy, size, color) {
+      const angle = Math.atan2(vy, vx || 0.0001);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.9, 0);
+      ctx.bezierCurveTo(-size * 0.2, -size * 0.85, size * 0.55, -size * 0.45, size, 0);
+      ctx.bezierCurveTo(size * 0.55, size * 0.45, -size * 0.2, size * 0.85, -size * 0.9, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
   }
 

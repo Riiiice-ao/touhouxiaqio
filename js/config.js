@@ -30,4 +30,6 @@ window.XTouhouWeb.Config = {
   BOMB_EFFECT_DURATION: 0.55,
   MAX_BOMB_STOCK: 3,
   MAX_LIFE_STOCK: 3,
+  AUDIO_TRACK_STAGE: "./sound/petrouchka1.mp3",
+  AUDIO_TRACK_BOSS: "./sound/K.156-3.mp3",
 };

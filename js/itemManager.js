@@ -1,12 +1,12 @@
 (function registerItemManager(global) {
-  const { GAME_HEIGHT, GAME_WIDTH, MAX_BOMB_STOCK } = global.Config;
+  const { GAME_HEIGHT, GAME_WIDTH } = global.Config;
 
   const ITEM_TYPE_POINTS = 1;
   const ITEM_TYPE_BOMB = 2;
 
   class ItemManager {
     constructor() {
-      this.pool = this.createPool(96);
+      this.pool = this.createPool(128);
       this.gravity = 220;
       this.magnetRange = 120;
       this.pickupRange = 15;
@@ -49,6 +49,20 @@
           y + (Math.random() - 0.5) * 12,
           (Math.random() - 0.5) * 50,
           -110 - Math.random() * 30
+        );
+      }
+    }
+
+    spawnBossRewardBurst(x, y, count = 30) {
+      for (let i = 0; i < count; i += 1) {
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.35;
+        const speed = 70 + Math.random() * 110;
+        this.spawnItem(
+          ITEM_TYPE_POINTS,
+          x,
+          y,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed - 80
         );
       }
     }
@@ -122,7 +136,11 @@
       if (type === ITEM_TYPE_POINTS) {
         player.addScore(1500);
       } else if (type === ITEM_TYPE_BOMB) {
+        const before = player.bombStock;
         player.addBombCharge(1);
+        if (before >= player.maxBombStock) {
+          player.addScore(3000);
+        }
       }
       this.recycle(slot);
     }
@@ -157,27 +175,29 @@
         const y = pool.y[slot];
         const type = pool.type[slot];
 
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(pool.attracted[slot] ? 0.08 * i : 0);
+
         if (type === ITEM_TYPE_POINTS) {
           ctx.fillStyle = "#ffd34f";
-          ctx.beginPath();
-          ctx.arc(x, y, 6, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = "rgba(255,255,255,0.65)";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
+          ctx.fillRect(-7, -7, 14, 14);
+          ctx.fillStyle = "#412400";
+          ctx.font = "bold 10px Trebuchet MS";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("P", 0, 1);
         } else if (type === ITEM_TYPE_BOMB) {
           ctx.fillStyle = "#53ff8a";
-          ctx.beginPath();
-          ctx.moveTo(x, y - 8);
-          ctx.lineTo(x + 8, y);
-          ctx.lineTo(x, y + 8);
-          ctx.lineTo(x - 8, y);
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = "rgba(255,255,255,0.75)";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
+          ctx.fillRect(-8, -8, 16, 16);
+          ctx.fillStyle = "#093b20";
+          ctx.font = "bold 10px Trebuchet MS";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("B", 0, 1);
         }
+
+        ctx.restore();
       }
     }
   }

@@ -85,7 +85,7 @@
       this.active = true;
     }
 
-    update(deltaTime, player) {
+    update(deltaTime, player, audioAnalysis = { isBeat: false, musicFlow: 0 }) {
       if (!this.active || this.defeated) {
         return;
       }
@@ -95,7 +95,7 @@
         return;
       }
 
-      this.updateBattle(deltaTime, player);
+      this.updateBattle(deltaTime, player, audioAnalysis);
     }
 
     updateEntry(deltaTime) {
@@ -116,7 +116,7 @@
       this.y += (dy / distance) * step;
     }
 
-    updateBattle(deltaTime, player) {
+    updateBattle(deltaTime, player, audioAnalysis) {
       this.moveClock += deltaTime;
       this.updateMovementState(deltaTime);
 
@@ -134,17 +134,21 @@
         this.spriteFrame = (this.spriteFrame + 1) % activeFrames.length;
       }
 
+      if (audioAnalysis.isBeat) {
+        this.emitter.fireNWay(this.x, this.y, 1, 0, 168, this.emitter.getAngleToTarget(this.x, this.y, player.x, player.y), 10, "#ff8a70");
+      }
+
       if (this.phase === 1) {
-        this.updatePhaseOnePatterns(player);
+        this.updatePhaseOnePatterns(player, audioAnalysis);
         return;
       }
 
       if (this.phase === 2) {
-        this.updatePhaseTwoPatterns(player);
+        this.updatePhaseTwoPatterns(player, audioAnalysis);
         return;
       }
 
-      this.updatePhaseThreePatterns(player);
+      this.updatePhaseThreePatterns(player, audioAnalysis);
     }
 
     updateMovementState(deltaTime) {
@@ -198,43 +202,29 @@
       this.prevX = this.x;
     }
 
-    updatePhaseOnePatterns(player) {
+    updatePhaseOnePatterns(player, audioAnalysis) {
       const hard = this.difficulty === "hard" || this.difficulty === "lunatic";
       const lunatic = this.difficulty === "lunatic";
+      const flowFactor = Math.max(0.25, audioAnalysis.musicFlow);
 
       if (this.waveTimer <= 0) {
         const baseInterval = this.moveState === "stopped" ? 0.26 : 0.52;
         const multiplier = lunatic ? 0.58 : hard ? 0.76 : 1;
-        this.waveTimer += baseInterval * multiplier;
+        this.waveTimer += baseInterval * multiplier * (1.05 - flowFactor * 0.35);
         const spread = this.moveState === "stopped" ? 145 : 92;
         const ways = this.moveState === "stopped" ? (lunatic ? 17 : hard ? 15 : 13) : lunatic ? 13 : hard ? 11 : 9;
         this.emitter.fireNWay(this.x, this.y, ways, spread, lunatic ? 195 : 170, 90, 6, "#ffd37e");
       }
 
-      if (this.aimedTimer <= 0) {
-        this.aimedTimer += lunatic ? 0.78 : hard ? 1.08 : 1.45;
-        this.emitter.fireAimedNWay(
-          this.x,
-          this.y,
-          player.x,
-          player.y,
-          lunatic ? 7 : hard ? 5 : 3,
-          22,
-          lunatic ? 226 : 198,
-          5,
-          "#9fd5ff"
-        );
-      }
-
-      const spiralStep = lunatic ? 0.032 : hard ? 0.04 : 0.05;
+      const spiralStep = (lunatic ? 0.032 : hard ? 0.04 : 0.05) * (1.08 - flowFactor * 0.2);
       while (this.spiralTimer >= spiralStep) {
         this.spiralTimer -= spiralStep;
         this.spiralAngle += this.moveState === "stopped" ? 18 : 12;
-        this.emitter.fireSpiralPair(this.x, this.y, this.spiralAngle, lunatic ? 214 : 192, 5, "#ffa46d", "#ff6b83");
+        this.emitter.fireSpiralPair(this.x, this.y, this.spiralAngle, lunatic ? 214 : 192, 5, "#b31b1b", "#d95454");
       }
     }
 
-    updatePhaseTwoPatterns(player) {
+    updatePhaseTwoPatterns(player, audioAnalysis) {
       const hard = this.difficulty === "hard" || this.difficulty === "lunatic";
       const lunatic = this.difficulty === "lunatic";
 
@@ -251,7 +241,7 @@
       }
 
       if (this.splitTimer <= 0) {
-        this.splitTimer += lunatic ? 0.5 : hard ? 0.64 : 0.82;
+        this.splitTimer += (lunatic ? 0.5 : hard ? 0.64 : 0.82) * (1.1 - audioAnalysis.musicFlow * 0.25);
         this.emitter.fireSplitBurstMother(this.x - 32, this.y + 12, 98);
         this.emitter.fireSplitBurstMother(this.x + 32, this.y + 12, 82);
         if (hard) {
@@ -264,7 +254,7 @@
       }
     }
 
-    updatePhaseThreePatterns(player) {
+    updatePhaseThreePatterns(player, audioAnalysis) {
       const hard = this.difficulty === "hard" || this.difficulty === "lunatic";
       const lunatic = this.difficulty === "lunatic";
 
@@ -280,7 +270,7 @@
       }
 
       if (this.randomTimer <= 0) {
-        this.randomTimer += lunatic ? 0.62 : hard ? 0.82 : 1.04;
+        this.randomTimer += (lunatic ? 0.62 : hard ? 0.82 : 1.04) * (1.08 - audioAnalysis.musicFlow * 0.3);
         const startAngle = Math.random() * 360;
         this.emitter.fireDelayedRandomRing(this.x, this.y, lunatic ? 20 : hard ? 16 : 12, lunatic ? 235 : 210, startAngle);
         if (hard) {

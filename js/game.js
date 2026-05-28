@@ -11,7 +11,8 @@
   const ui = new global.UiManager();
   const dialogueManager = new global.DialogueManager();
   const assetLoader = new global.AssetLoader();
-  const bulletManager = new global.BulletManager();
+  const audioManager = new global.AudioManager();
+  const bulletManager = new global.BulletManager(audioManager);
   const itemManager = new global.ItemManager();
   const bombEffect = new global.BombEffect();
   const emitter = new global.Emitter(bulletManager);
@@ -27,6 +28,7 @@
     isPaused: false,
     assetsReady: false,
     backgroundScroll: 0,
+    bossMusicStarted: false,
   };
 
   hud.reset(player);
@@ -69,14 +71,18 @@
     requestAnimationFrame(gameLoop);
   }
 
-  function startGame(difficulty) {
+  async function startGame(difficulty) {
     if (!gameState.assetsReady) {
       return;
     }
 
+    await audioManager.resume();
+    await audioManager.playTrack("stage");
+
     gameState.currentDifficulty = difficulty;
     gameState.scene = "playing";
     gameState.isPaused = false;
+    gameState.bossMusicStarted = false;
     ui.hideAllOverlayMenus();
     resetRunState();
     stageManager.beginIntroDialogue();
@@ -94,6 +100,7 @@
     hud.reset(player);
     hud.setDifficulty(gameState.currentDifficulty);
     gameState.backgroundScroll = 0;
+    gameState.bossMusicStarted = false;
     dialogueManager.hide();
   }
 
@@ -125,6 +132,7 @@
     gameState.isPaused = false;
     ui.hideAllOverlayMenus();
     resetRunState();
+    audioManager.playTrack("stage");
     stageManager.beginIntroDialogue();
   }
 
@@ -148,6 +156,8 @@
     gameState.isPaused = true;
     bulletManager.clearEnemyBullets();
     itemManager.clearAll();
+    bossController.active = false;
+    audioManager.stopMusic();
     ui.showScoreBoard(buildScoreResult(true));
   }
 
@@ -164,6 +174,7 @@
     hud.reset(player);
     hud.setDifficulty(null);
     dialogueManager.hide();
+    audioManager.stopMusic();
     ui.showStartMenu();
   }
 
@@ -216,6 +227,13 @@
   }
 
   function update(deltaTime) {
+    const audioAnalysis = audioManager.update(deltaTime);
+
+    if (stageManager.state === "BOSS_ENTRY" && !gameState.bossMusicStarted && !dialogueManager.active) {
+      gameState.bossMusicStarted = true;
+      audioManager.playTrack("boss");
+    }
+
     if (gameState.scene !== "playing" || gameState.isPaused || dialogueManager.active || stageManager.pauseForDialogue) {
       return;
     }
@@ -223,12 +241,14 @@
     updateBackground(deltaTime);
     player.update(deltaTime);
     stageManager.update(deltaTime, player);
+    bossController.update(deltaTime, player, audioAnalysis);
     bulletManager.update(deltaTime, player, enemyManager, bossController);
     itemManager.update(deltaTime, player);
     bombEffect.update(deltaTime, bulletManager);
     updateBodyCollisions();
 
     if (stageManager.state === "CLEAR") {
+      itemManager.spawnBossRewardBurst(bossController.x || 300, bossController.y || 160, 30);
       showGameClearBoard();
       return;
     }
