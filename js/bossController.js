@@ -11,6 +11,15 @@
     GAME_WIDTH,
   } = global.Config;
 
+  const Palette = global.RosePalette || {
+    roseRed: "#D21F3C",
+    crimson: "#99001A",
+    gold: "#FFD700",
+    antiqueGold: "#D4AF37",
+    velvet: "#4A0E17",
+    moon: "#FFFDD0",
+  };
+
   const BOSS_FRAMES = {
     idle: [
       { x: 1272, y: 324, w: 204, h: 308 },
@@ -54,7 +63,7 @@
       this.defeated = false;
       this.phase = 1;
       this.phaseName = "Scarlet Bloom";
-      this.phaseBarColors = ["#ffe0d5", "#ff8f80", "#f3404c", "#8b1020"];
+      this.phaseBarColors = [Palette.moon, Palette.antiqueGold, Palette.crimson, Palette.velvet];
       this.x = BOSS_ENTRY_X;
       this.y = -92;
       this.moveClock = 0;
@@ -135,11 +144,20 @@
       }
 
       if (audioAnalysis.isBeat) {
-        this.emitter.fireNWay(this.x, this.y, 1, 0, 168, this.emitter.getAngleToTarget(this.x, this.y, player.x, player.y), 10, "#ff8a70");
+        this.emitter.fireNWay(
+          this.x,
+          this.y,
+          1,
+          0,
+          160,
+          this.emitter.getAngleToTarget(this.x, this.y, player.x, player.y),
+          11,
+          Palette.antiqueGold
+        );
       }
 
       if (this.phase === 1) {
-        this.updatePhaseOnePatterns(player, audioAnalysis);
+        this.updatePhaseOnePatterns(audioAnalysis);
         return;
       }
 
@@ -202,25 +220,25 @@
       this.prevX = this.x;
     }
 
-    updatePhaseOnePatterns(player, audioAnalysis) {
+    updatePhaseOnePatterns(audioAnalysis) {
       const hard = this.difficulty === "hard" || this.difficulty === "lunatic";
       const lunatic = this.difficulty === "lunatic";
       const flowFactor = Math.max(0.25, audioAnalysis.musicFlow);
 
       if (this.waveTimer <= 0) {
-        const baseInterval = this.moveState === "stopped" ? 0.26 : 0.52;
+        const baseInterval = this.moveState === "stopped" ? 0.28 : 0.56;
         const multiplier = lunatic ? 0.58 : hard ? 0.76 : 1;
-        this.waveTimer += baseInterval * multiplier * (1.05 - flowFactor * 0.35);
+        this.waveTimer += baseInterval * multiplier * (1.08 - flowFactor * 0.34);
         const spread = this.moveState === "stopped" ? 145 : 92;
         const ways = this.moveState === "stopped" ? (lunatic ? 17 : hard ? 15 : 13) : lunatic ? 13 : hard ? 11 : 9;
-        this.emitter.fireNWay(this.x, this.y, ways, spread, lunatic ? 195 : 170, 90, 6, "#ffd37e");
+        this.emitter.fireNWay(this.x, this.y, ways, spread, lunatic ? 158 : 146, 90, 7, Palette.antiqueGold);
       }
 
-      const spiralStep = (lunatic ? 0.032 : hard ? 0.04 : 0.05) * (1.08 - flowFactor * 0.2);
+      const spiralStep = (lunatic ? 0.036 : hard ? 0.045 : 0.055) * (1.08 - flowFactor * 0.2);
       while (this.spiralTimer >= spiralStep) {
         this.spiralTimer -= spiralStep;
         this.spiralAngle += this.moveState === "stopped" ? 18 : 12;
-        this.emitter.fireSpiralPair(this.x, this.y, this.spiralAngle, lunatic ? 214 : 192, 5, "#b31b1b", "#d95454");
+        this.emitter.fireSpiralPair(this.x, this.y, this.spiralAngle, lunatic ? 176 : 160, 7, "PETAL_DARK", "PETAL_GOLD");
       }
     }
 
@@ -241,15 +259,14 @@
       }
 
       if (this.splitTimer <= 0) {
-        this.splitTimer += (lunatic ? 0.5 : hard ? 0.64 : 0.82) * (1.1 - audioAnalysis.musicFlow * 0.25);
-        this.emitter.fireSplitBurstMother(this.x - 32, this.y + 12, 98);
-        this.emitter.fireSplitBurstMother(this.x + 32, this.y + 12, 82);
+        this.splitTimer += (lunatic ? 0.54 : hard ? 0.68 : 0.88) * (1.12 - audioAnalysis.musicFlow * 0.24);
+        this.emitter.fireSplitBurstMother(this.x - 32, this.y + 12, 96);
+        this.emitter.fireSplitBurstMother(this.x + 32, this.y + 12, 84);
         if (hard) {
-          this.emitter.fireSplitBurstMother(this.x, this.y + 4, 90);
+          this.emitter.fireSplitBurstMother(this.x, this.y + 6, 90);
         }
         if (lunatic) {
-          this.emitter.fireSplitBurstMother(this.x - 72, this.y + 8, 108);
-          this.emitter.fireSplitBurstMother(this.x + 72, this.y + 8, 72);
+          this.emitter.fireNWay(this.x, this.y, 7, 68, 88, 90, 4, Palette.moon);
         }
       }
     }
@@ -263,22 +280,22 @@
           this.followTimer += lunatic ? 0.24 : hard ? 0.34 : 0.42;
           this.emitter.fireRetargetFollower(this.x, this.y, player.x, player.y);
           if (lunatic) {
-            this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 5, 16, 240, 5, "#53ffcf");
+            this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 5, 16, 200, 6, "ROSE_GILDED");
           }
         }
         return;
       }
 
       if (this.randomTimer <= 0) {
-        this.randomTimer += (lunatic ? 0.62 : hard ? 0.82 : 1.04) * (1.08 - audioAnalysis.musicFlow * 0.3);
+        this.randomTimer += (lunatic ? 0.66 : hard ? 0.88 : 1.12) * (1.08 - audioAnalysis.musicFlow * 0.28);
         const startAngle = Math.random() * 360;
-        this.emitter.fireDelayedRandomRing(this.x, this.y, lunatic ? 20 : hard ? 16 : 12, lunatic ? 235 : 210, startAngle);
+        this.emitter.fireDelayedRandomRing(this.x, this.y, lunatic ? 20 : hard ? 16 : 12, lunatic ? 158 : 146, startAngle);
         if (hard) {
           this.emitter.fireSplitBurstMother(this.x - 48, this.y + 10, 102);
           this.emitter.fireSplitBurstMother(this.x + 48, this.y + 10, 78);
         }
         if (lunatic) {
-          this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 7, 26, 250, 6, "#00ff55");
+          this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 7, 26, 208, 6, "ROSE_GILDED");
         }
       }
     }
@@ -300,20 +317,20 @@
       this.phase = phase;
 
       if (phase === 2) {
-        this.phaseName = "Split Burst Sign";
-        this.phaseBarColors = ["#fff8d4", "#ffc642", "#ff8a00", "#912700"];
+        this.phaseName = "Rose Explosion";
+        this.phaseBarColors = [Palette.moon, Palette.roseRed, Palette.crimson, Palette.velvet];
       } else if (phase === 3) {
-        this.phaseName = "Chaotic Freeze Sign";
-        this.phaseBarColors = ["#d6f1ff", "#4bb4ff", "#0e69f0", "#07266c"];
+        this.phaseName = "Frozen Rose Finale";
+        this.phaseBarColors = [Palette.moon, Palette.gold, Palette.roseRed, Palette.velvet];
       }
 
       this.bulletManager.clearEnemyBullets();
       this.bombEffect.start(this.x, this.y, this.phaseName, {
         clearsBullets: false,
         overlayAlpha: 0.28,
-        ringColor: phase === 2 ? "255, 220, 120" : "120, 220, 255",
-        shadowColor: phase === 2 ? "rgba(255, 180, 60, 0.55)" : "rgba(80, 180, 255, 0.55)",
-        textColor: phase === 2 ? "rgba(255, 247, 205, 0.98)" : "rgba(220, 245, 255, 0.98)",
+        ringColor: phase === 2 ? "255, 215, 0" : "255, 253, 208",
+        shadowColor: phase === 2 ? "rgba(212, 31, 60, 0.55)" : "rgba(212, 175, 55, 0.55)",
+        textColor: "rgba(255,253,208,0.98)",
       });
 
       this.moveState = "stopped";
@@ -364,29 +381,9 @@
         if (this.spriteState === "side" && this.facingDirection > 0) {
           ctx.translate(this.x, 0);
           ctx.scale(-1, 1);
-          ctx.drawImage(
-            sprite,
-            frame.x,
-            frame.y,
-            frame.w,
-            frame.h,
-            -24,
-            this.y - 32,
-            48,
-            64
-          );
+          ctx.drawImage(sprite, frame.x, frame.y, frame.w, frame.h, -24, this.y - 32, 48, 64);
         } else {
-          ctx.drawImage(
-            sprite,
-            frame.x,
-            frame.y,
-            frame.w,
-            frame.h,
-            this.x - 24,
-            this.y - 32,
-            48,
-            64
-          );
+          ctx.drawImage(sprite, frame.x, frame.y, frame.w, frame.h, this.x - 24, this.y - 32, 48, 64);
         }
         ctx.restore();
         return;
@@ -394,9 +391,9 @@
 
       ctx.save();
       const bodyGlow = ctx.createRadialGradient(this.x, this.y, 8, this.x, this.y, 40);
-      bodyGlow.addColorStop(0, "#fff8fc");
-      bodyGlow.addColorStop(0.5, "#ffc7d9");
-      bodyGlow.addColorStop(1, "#9b3757");
+      bodyGlow.addColorStop(0, Palette.moon);
+      bodyGlow.addColorStop(0.5, Palette.roseRed);
+      bodyGlow.addColorStop(1, Palette.velvet);
       ctx.fillStyle = bodyGlow;
       ctx.beginPath();
       ctx.arc(this.x, this.y, 24, 0, Math.PI * 2);
@@ -442,7 +439,7 @@
       ctx.lineWidth = 2;
       ctx.strokeRect(x, y, width, height);
 
-      ctx.fillStyle = "#fff2e7";
+      ctx.fillStyle = Palette.moon;
       ctx.font = "bold 14px Trebuchet MS";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";

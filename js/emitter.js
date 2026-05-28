@@ -1,6 +1,15 @@
 (function registerEmitter(global) {
   const BulletBehavior = global.BulletBehavior;
 
+  const Palette = {
+    roseRed: "#D21F3C",
+    crimson: "#99001A",
+    gold: "#FFD700",
+    antiqueGold: "#D4AF37",
+    velvet: "#4A0E17",
+    moon: "#FFFDD0",
+  };
+
   class Emitter {
     constructor(bulletManager) {
       this.bulletManager = bulletManager;
@@ -9,7 +18,7 @@
       this.spiralInterval = 0.04;
     }
 
-    fireNWay(x, y, wayCount, spreadAngle, speed, centerAngle, radius = 6, color = "#ffb35c") {
+    fireNWay(x, y, wayCount, spreadAngle, speed, centerAngle, radius = 6, color = Palette.antiqueGold) {
       if (wayCount <= 0) {
         return;
       }
@@ -30,7 +39,7 @@
       }
     }
 
-    fireRing(x, y, count, speed, startAngle = 0, radius = 6, color = "#ffb35c") {
+    fireRing(x, y, count, speed, startAngle = 0, radius = 6, color = Palette.antiqueGold) {
       if (count <= 0) {
         return;
       }
@@ -52,13 +61,13 @@
       spreadAngle,
       speed,
       radius = 5,
-      color = "#9ed8ff"
+      color = Palette.gold
     ) {
       const centerAngle = this.getAngleToTarget(x, y, targetX, targetY);
       this.fireNWay(x, y, wayCount, spreadAngle, speed, centerAngle, radius, color);
     }
 
-    fireSpiralPair(x, y, baseAngle, speed, radius = 5, colorA = "#ffa46d", colorB = "#ff6b83") {
+    fireSpiralPair(x, y, baseAngle, speed, radius = 5, colorA = Palette.crimson, colorB = Palette.antiqueGold) {
       const primary = this.angleToVelocity(baseAngle, speed);
       const secondary = this.angleToVelocity(baseAngle + 180, speed);
 
@@ -76,7 +85,7 @@
         velocity.vx,
         velocity.vy,
         8,
-        "#00ff55",
+        Palette.crimson,
         1,
         {
           type: BulletBehavior.RETARGET_ONCE,
@@ -87,20 +96,20 @@
     }
 
     fireSplitBurstMother(x, y, angleDeg = 90) {
-      const velocity = this.angleToVelocity(angleDeg, 78);
+      const velocity = this.angleToVelocity(angleDeg, 50);
       this.bulletManager.spawnBullet(
         x,
         y,
         velocity.vx,
         velocity.vy,
-        16,
-        "#ffff00",
+        18,
+        "ROSE_MOTHER",
         1,
         {
           type: BulletBehavior.SPLIT_BURST,
-          param0: 1.08,
+          param0: 1.12,
           param1: 16,
-          param2: 268,
+          param2: 174,
         }
       );
     }
@@ -120,8 +129,8 @@
           y,
           velocity.vx,
           velocity.vy,
-          6,
-          "#0088ff",
+          7,
+          "ROSE_GILDED",
           1,
           {
             type: BulletBehavior.DELAYED_RANDOM,
@@ -145,11 +154,11 @@
 
     fireSpiral(x, y) {
       this.spiralAngle += 11;
-      const primary = this.angleToVelocity(this.spiralAngle, 180);
-      const secondary = this.angleToVelocity(this.spiralAngle + 180, 180);
+      const primary = this.angleToVelocity(this.spiralAngle, 170);
+      const secondary = this.angleToVelocity(this.spiralAngle + 180, 170);
 
-      this.bulletManager.spawnBullet(x, y, primary.vx, primary.vy, 5, "#ffa46d");
-      this.bulletManager.spawnBullet(x, y, secondary.vx, secondary.vy, 5, "#ff6b83");
+      this.bulletManager.spawnBullet(x, y, primary.vx, primary.vy, 7, "PETAL_DARK");
+      this.bulletManager.spawnBullet(x, y, secondary.vx, secondary.vy, 7, "PETAL_GOLD");
     }
 
     getAngleToTarget(x, y, targetX, targetY) {
@@ -166,4 +175,5 @@
   }
 
   global.Emitter = Emitter;
+  global.RosePalette = Palette;
 })(window.XTouhouWeb);

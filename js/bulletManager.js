@@ -14,6 +14,15 @@
     DELAYED_RANDOM: 3,
   };
 
+  const Palette = global.RosePalette || {
+    roseRed: "#D21F3C",
+    crimson: "#99001A",
+    gold: "#FFD700",
+    antiqueGold: "#D4AF37",
+    velvet: "#4A0E17",
+    moon: "#FFFDD0",
+  };
+
   global.BulletBehavior = BulletBehavior;
 
   class BulletManager {
@@ -102,7 +111,7 @@
     update(deltaTime, player, enemyManager, bossController) {
       const count = this.enemyPool.count;
       if (count > 420) {
-        this.globalSpeedScale = Math.max(0.45, 1 - (count - 420) / 1600);
+        this.globalSpeedScale = Math.max(0.35, 1 - (count - 420) / 1200);
       } else {
         this.globalSpeedScale = 1;
       }
@@ -224,15 +233,15 @@
       const x = pool.x[slot];
       const y = pool.y[slot];
       const count = Math.max(1, Math.round(pool.param1[slot]));
-      const speed = pool.param2[slot];
+      const speed = pool.param2[slot] * 0.65;
       const step = (Math.PI * 2) / count;
-      const startAngle = (pool.lifeTimer[slot] * 5.3) % (Math.PI * 2);
+      const startAngle = (pool.lifeTimer[slot] * 4.7) % (Math.PI * 2);
 
       this.recycle(pool, slot);
 
       for (let i = 0; i < count; i += 1) {
         const angle = startAngle + step * i;
-        this.spawnBullet(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 3, "#ff00ff");
+        this.spawnBullet(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 5, "PETAL_SPLINTER");
       }
     }
 
@@ -279,7 +288,6 @@
 
     clearEnemyBullets() {
       const pool = this.enemyPool;
-
       while (pool.count > 0) {
         const slot = pool.activeIndices[0];
         this.recycle(pool, slot);
@@ -327,7 +335,6 @@
 
       pool.activeIndices[removePosition] = lastSlot;
       pool.activePositions[lastSlot] = removePosition;
-
       pool.count = lastPosition;
       pool.activePositions[slot] = -1;
       pool.active[slot] = 0;
@@ -340,7 +347,6 @@
       pool.param1[slot] = 0;
       pool.param2[slot] = 0;
       pool.param3[slot] = 0;
-
       pool.freeIndices[pool.freeTop] = slot;
       pool.freeTop += 1;
     }
@@ -359,7 +365,19 @@
         const radius = pool.radius[slot];
         const color = pool.colors[slot];
 
-        if (color === "#ffd37e" || color === "#ffa46d" || color === "#ff6b83" || color === "#00ff55") {
+        if (color === "ROSE_MOTHER") {
+          this.drawRoseBloom(ctx, x, y, pool.vx[slot], pool.vy[slot], radius);
+          continue;
+        }
+
+        if (
+          color === "PETAL_DARK" ||
+          color === "PETAL_GOLD" ||
+          color === "PETAL_SPLINTER" ||
+          color === "ROSE_GILDED" ||
+          color === Palette.crimson ||
+          color === Palette.antiqueGold
+        ) {
           this.drawRosePetal(ctx, x, y, pool.vx[slot], pool.vy[slot], radius + 6, color);
           continue;
         }
@@ -382,19 +400,93 @@
       }
     }
 
-    drawRosePetal(ctx, x, y, vx, vy, size, color) {
-      const angle = Math.atan2(vy, vx || 0.0001);
+    drawRosePetal(ctx, x, y, vx, vy, size, colorKey) {
+      const angle = Math.atan2(vy || 0.0001, vx || 0.0001);
+      const colors = this.getPetalColors(colorKey);
+
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(angle);
-      ctx.fillStyle = color;
+
+      const gradient = ctx.createRadialGradient(-size * 0.18, 0, size * 0.12, 0, 0, size * 1.05);
+      gradient.addColorStop(0, colors.center);
+      gradient.addColorStop(0.62, colors.mid);
+      gradient.addColorStop(1, colors.edge);
+
+      ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.moveTo(-size * 0.9, 0);
-      ctx.bezierCurveTo(-size * 0.2, -size * 0.85, size * 0.55, -size * 0.45, size, 0);
-      ctx.bezierCurveTo(size * 0.55, size * 0.45, -size * 0.2, size * 0.85, -size * 0.9, 0);
+      ctx.moveTo(-size * 0.92, 0);
+      ctx.bezierCurveTo(-size * 0.48, -size * 0.98, size * 0.34, -size * 0.76, size * 0.9, -size * 0.12);
+      ctx.bezierCurveTo(size * 1.03, -size * 0.02, size * 1.03, size * 0.02, size * 0.9, size * 0.12);
+      ctx.bezierCurveTo(size * 0.34, size * 0.76, -size * 0.48, size * 0.98, -size * 0.92, 0);
       ctx.closePath();
       ctx.fill();
+
+      ctx.strokeStyle = colors.highlight;
+      ctx.lineWidth = Math.max(1, size * 0.09);
+      ctx.stroke();
+
       ctx.restore();
+    }
+
+    drawRoseBloom(ctx, x, y, vx, vy, size) {
+      const angle = Math.atan2(vy || 0.0001, vx || 0.0001);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+
+      for (let i = 0; i < 6; i += 1) {
+        ctx.save();
+        ctx.rotate((Math.PI * 2 * i) / 6);
+        this.drawRosePetal(ctx, 0, 0, 1, 0, size * (0.88 - i * 0.04), i % 2 === 0 ? "PETAL_DARK" : "PETAL_GOLD");
+        ctx.restore();
+      }
+
+      const core = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.5);
+      core.addColorStop(0, Palette.gold);
+      core.addColorStop(0.5, Palette.antiqueGold);
+      core.addColorStop(1, Palette.velvet);
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    getPetalColors(colorKey) {
+      if (colorKey === "PETAL_GOLD") {
+        return {
+          center: Palette.velvet,
+          mid: Palette.gold,
+          edge: Palette.antiqueGold,
+          highlight: Palette.moon,
+        };
+      }
+
+      if (colorKey === "ROSE_GILDED") {
+        return {
+          center: Palette.crimson,
+          mid: Palette.roseRed,
+          edge: Palette.gold,
+          highlight: Palette.moon,
+        };
+      }
+
+      if (colorKey === "PETAL_SPLINTER") {
+        return {
+          center: Palette.velvet,
+          mid: Palette.crimson,
+          edge: Palette.roseRed,
+          highlight: Palette.moon,
+        };
+      }
+
+      return {
+        center: Palette.velvet,
+        mid: Palette.crimson,
+        edge: Palette.roseRed,
+        highlight: Palette.moon,
+      };
     }
   }
 
