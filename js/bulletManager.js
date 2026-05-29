@@ -24,6 +24,7 @@
     white: "#FFFDD0",
     orange: "#FF7F50",
     amber: "#D9A63A",
+    antiqueGold: "#D4AF37",
     leaf: "#2E5A1C",
     leafLight: "#59ff9a",
     gold: "#FFD700",
@@ -39,7 +40,7 @@
       this.difficulty = "easy";
       this.spriteCache = this.initBulletSprites();
       this.burstFx = this.createBurstFxPool(32);
-      this.glowSpriteLastUpdate = 0;
+      this.enemySpawnAccumulator = 0;
     }
 
     setDifficulty(difficulty) {
@@ -63,6 +64,8 @@
         param1: new Float32Array(capacity),
         param2: new Float32Array(capacity),
         param3: new Float32Array(capacity),
+        angleOffset: new Float32Array(capacity),
+        spinSpeed: new Float32Array(capacity),
         active: new Uint8Array(capacity),
         grazed: new Uint8Array(capacity),
         activeIndices: new Int32Array(capacity),
@@ -115,188 +118,365 @@
       };
 
       const cache = {
-        darkPetal: createCanvas(96),
-        whitePetal: createCanvas(48),
-        leafPetal: createCanvas(72),
-        orangePetal: createCanvas(84),
-        glowPetal: createCanvas(96),
+        darkPetal: createCanvas(144),
+        gildedDiamond: createCanvas(132),
+        whitePetal: createCanvas(84),
+        leafPetal: createCanvas(114),
+        orangePetal: createCanvas(126),
       };
 
       this.paintDarkPetal(cache.darkPetal.ctx, cache.darkPetal.size);
+      this.paintGildedDiamond(cache.gildedDiamond.ctx, cache.gildedDiamond.size);
       this.paintWhitePetal(cache.whitePetal.ctx, cache.whitePetal.size);
       this.paintLeafPetal(cache.leafPetal.ctx, cache.leafPetal.size);
       this.paintOrangePetal(cache.orangePetal.ctx, cache.orangePetal.size);
-      this.paintGlowPetal(cache.glowPetal.ctx, cache.glowPetal.size, Date.now());
 
       return cache;
     }
 
-    paintCommaPetal(ctx, size, colors, options = {}) {
-      const w = options.width ?? size * 0.84;
-      const h = options.height ?? size * 0.46;
+    paintDarkPetal(ctx, size) {
       const cx = size * 0.5;
       const cy = size * 0.5;
+      const w = size * 0.68;
+      const h = size * 0.28;
+      const tracePath = () => {
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.54, h * 0.02);
+        ctx.bezierCurveTo(-w * 0.58, -h * 0.82, -w * 0.14, -h * 1.02, w * 0.26, -h * 0.30);
+        ctx.bezierCurveTo(w * 0.52, -h * 0.04, w * 0.56, h * 0.10, w * 0.18, h * 0.34);
+        ctx.bezierCurveTo(-w * 0.04, h * 0.48, -w * 0.18, h * 0.88, -w * 0.38, h * 0.46);
+        ctx.bezierCurveTo(-w * 0.48, h * 0.26, -w * 0.60, h * 0.08, -w * 0.54, h * 0.02);
+        ctx.closePath();
+      };
 
       ctx.clearRect(0, 0, size, size);
       ctx.save();
       ctx.translate(cx, cy);
 
-      const gradient = ctx.createRadialGradient(-w * 0.08, 0, h * 0.06, 0, 0, w * 0.58);
-      gradient.addColorStop(0, colors.inner);
-      gradient.addColorStop(0.62, colors.mid);
-      gradient.addColorStop(1, colors.outer);
+      const fill = ctx.createRadialGradient(-w * 0.14, -h * 0.04, 0, -w * 0.08, 0, w * 0.94);
+      fill.addColorStop(0, "rgba(255,245,248,0.98)");
+      fill.addColorStop(0.18, "#D34A5F");
+      fill.addColorStop(0.52, "#99001A");
+      fill.addColorStop(1, "#4A0E17");
 
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.moveTo(-w * 0.54, 0);
-      ctx.bezierCurveTo(-w * 0.32, -h * 1.3, w * 0.08, -h * 1.08, w * 0.44, -h * 0.18);
-      ctx.bezierCurveTo(w * 0.56, -h * 0.02, w * 0.58, h * 0.04, w * 0.44, h * 0.18);
-      ctx.bezierCurveTo(w * 0.08, h * 1.08, -w * 0.32, h * 1.3, -w * 0.54, 0);
-      ctx.closePath();
+      ctx.shadowColor = "rgba(255,0,24,0.42)";
+      ctx.shadowBlur = size * 0.14;
+      tracePath();
+      ctx.fillStyle = fill;
       ctx.fill();
 
-      ctx.shadowBlur = options.shadowBlur ?? 10;
-      ctx.shadowColor = colors.glow;
-      ctx.strokeStyle = colors.stroke;
-      ctx.lineWidth = options.strokeWidth ?? Math.max(1.2, size * 0.05);
+      ctx.save();
+      tracePath();
+      ctx.clip();
+      const core = ctx.createRadialGradient(-w * 0.20, -h * 0.04, 0, -w * 0.10, 0, w * 0.56);
+      core.addColorStop(0, "rgba(255,255,255,0.92)");
+      core.addColorStop(0.28, "rgba(255,190,205,0.74)");
+      core.addColorStop(0.62, "rgba(153,0,26,0.16)");
+      core.addColorStop(1, "rgba(74,14,23,0)");
+      ctx.fillStyle = core;
+      ctx.fillRect(-size, -size, size * 2, size * 2);
+      ctx.restore();
+
+      ctx.shadowColor = "rgba(255,24,48,0.28)";
+      ctx.shadowBlur = size * 0.06;
+      tracePath();
+      ctx.lineWidth = size * 0.046;
+      ctx.strokeStyle = "rgba(255,255,255,0.98)";
       ctx.stroke();
 
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = colors.coreLine;
-      ctx.lineWidth = Math.max(0.8, size * 0.03);
+      tracePath();
+      ctx.lineWidth = size * 0.02;
+      ctx.strokeStyle = "rgba(255,78,110,0.78)";
+      ctx.stroke();
+
       ctx.beginPath();
-      ctx.moveTo(-w * 0.24, 0);
-      ctx.quadraticCurveTo(w * 0.04, -h * 0.24, w * 0.26, 0);
-      ctx.quadraticCurveTo(w * 0.04, h * 0.24, -w * 0.24, 0);
+      ctx.moveTo(-w * 0.26, h * 0.04);
+      ctx.bezierCurveTo(-w * 0.08, -h * 0.18, w * 0.10, -h * 0.14, w * 0.18, -h * 0.02);
+      ctx.bezierCurveTo(w * 0.00, h * 0.06, -w * 0.08, h * 0.16, -w * 0.20, h * 0.18);
+      ctx.lineWidth = size * 0.016;
+      ctx.strokeStyle = "rgba(255,255,255,0.34)";
       ctx.stroke();
 
       ctx.restore();
     }
 
-    paintDarkPetal(ctx, size) {
-      this.paintCommaPetal(ctx, size, {
-        inner: "#4A0E17",
-        mid: "#99001A",
-        outer: "#D21F3C",
-        stroke: "#D21F3C",
-        glow: "rgba(210,31,60,0.38)",
-        coreLine: "rgba(255,253,208,0.16)",
-      }, {
-        width: size * 0.86,
-        height: size * 0.45,
-      });
+    paintGildedDiamond(ctx, size) {
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const w = size * 0.24;
+      const h = size * 0.44;
+      const tracePath = () => {
+        ctx.beginPath();
+        ctx.moveTo(0, -h);
+        ctx.bezierCurveTo(w * 0.18, -h * 0.74, w * 0.40, -h * 0.36, w * 0.48, 0);
+        ctx.bezierCurveTo(w * 0.40, h * 0.36, w * 0.18, h * 0.74, 0, h);
+        ctx.bezierCurveTo(-w * 0.18, h * 0.74, -w * 0.40, h * 0.36, -w * 0.48, 0);
+        ctx.bezierCurveTo(-w * 0.40, -h * 0.36, -w * 0.18, -h * 0.74, 0, -h);
+        ctx.closePath();
+      };
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      const fill = ctx.createRadialGradient(0, -h * 0.12, 0, 0, 0, h * 1.08);
+      fill.addColorStop(0, "rgba(255,246,249,0.98)");
+      fill.addColorStop(0.18, "rgba(255,215,224,0.82)");
+      fill.addColorStop(0.45, "#D21F3C");
+      fill.addColorStop(1, "#7C0A18");
+
+      ctx.shadowColor = "rgba(255,215,0,0.54)";
+      ctx.shadowBlur = size * 0.18;
+      tracePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      ctx.save();
+      tracePath();
+      ctx.clip();
+      const highlight = ctx.createLinearGradient(0, -h, 0, h);
+      highlight.addColorStop(0, "rgba(255,255,255,0.76)");
+      highlight.addColorStop(0.28, "rgba(255,255,255,0.22)");
+      highlight.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = highlight;
+      ctx.fillRect(-size, -size, size * 2, size * 2);
+      ctx.restore();
+
+      ctx.shadowColor = "rgba(255,215,0,0.46)";
+      ctx.shadowBlur = size * 0.14;
+      tracePath();
+      ctx.lineWidth = size * 0.078;
+      ctx.strokeStyle = "#FFD700";
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      tracePath();
+      ctx.lineWidth = size * 0.024;
+      ctx.strokeStyle = "rgba(255,255,255,0.98)";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, -h * 0.54);
+      ctx.lineTo(0, h * 0.54);
+      ctx.lineWidth = size * 0.018;
+      ctx.strokeStyle = "rgba(255,255,255,0.32)";
+      ctx.stroke();
+
+      ctx.restore();
     }
 
     paintWhitePetal(ctx, size) {
-      this.paintCommaPetal(ctx, size, {
-        inner: "#FFF7F2",
-        mid: "#FFFDD0",
-        outer: "#F2D9D9",
-        stroke: "#FFFFFF",
-        glow: "rgba(255,255,255,0.42)",
-        coreLine: "rgba(255,220,220,0.28)",
-      }, {
-        width: size * 0.72,
-        height: size * 0.34,
-        strokeWidth: 1.4,
-        shadowBlur: 12,
-      });
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const w = size * 0.46;
+      const h = size * 0.24;
+      const tracePath = () => {
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.56, 0);
+        ctx.bezierCurveTo(-w * 0.48, -h * 0.92, -w * 0.06, -h * 0.96, w * 0.28, -h * 0.24);
+        ctx.bezierCurveTo(w * 0.48, -h * 0.02, w * 0.46, h * 0.16, w * 0.18, h * 0.30);
+        ctx.bezierCurveTo(-w * 0.06, h * 0.42, -w * 0.28, h * 0.70, -w * 0.50, h * 0.18);
+        ctx.bezierCurveTo(-w * 0.56, h * 0.08, -w * 0.60, h * 0.02, -w * 0.56, 0);
+        ctx.closePath();
+      };
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      const fill = ctx.createRadialGradient(-w * 0.10, -h * 0.04, 0, -w * 0.04, 0, w * 0.78);
+      fill.addColorStop(0, "rgba(255,255,255,0.98)");
+      fill.addColorStop(0.24, "#FFFDD0");
+      fill.addColorStop(0.70, "#F5EFD6");
+      fill.addColorStop(1, "#E9DCCF");
+
+      ctx.shadowColor = "rgba(255,255,255,0.70)";
+      ctx.shadowBlur = size * 0.20;
+      tracePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      ctx.save();
+      tracePath();
+      ctx.clip();
+      const core = ctx.createRadialGradient(-w * 0.14, 0, 0, -w * 0.06, 0, w * 0.42);
+      core.addColorStop(0, "rgba(255,255,255,0.92)");
+      core.addColorStop(0.42, "rgba(255,255,255,0.24)");
+      core.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = core;
+      ctx.fillRect(-size, -size, size * 2, size * 2);
+      ctx.restore();
+
+      ctx.shadowColor = "rgba(255,255,255,0.44)";
+      ctx.shadowBlur = size * 0.08;
+      tracePath();
+      ctx.lineWidth = size * 0.05;
+      ctx.strokeStyle = "rgba(255,255,255,0.98)";
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.22, 0);
+      ctx.bezierCurveTo(-w * 0.04, -h * 0.18, w * 0.12, -h * 0.10, w * 0.20, 0);
+      ctx.bezierCurveTo(w * 0.08, h * 0.06, -w * 0.02, h * 0.12, -w * 0.14, h * 0.12);
+      ctx.lineWidth = size * 0.018;
+      ctx.strokeStyle = "rgba(255,255,255,0.34)";
+      ctx.stroke();
+
+      ctx.restore();
     }
 
     paintLeafPetal(ctx, size) {
       const cx = size * 0.5;
       const cy = size * 0.5;
+      const w = size * 0.56;
+      const h = size * 0.18;
+      const tracePath = () => {
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.58, 0);
+        ctx.bezierCurveTo(-w * 0.48, -h * 0.12, -w * 0.38, -h * 0.22, -w * 0.30, -h * 0.10);
+        ctx.quadraticCurveTo(-w * 0.18, -h * 0.26, -w * 0.08, -h * 0.12);
+        ctx.quadraticCurveTo(w * 0.02, -h * 0.34, w * 0.14, -h * 0.14);
+        ctx.quadraticCurveTo(w * 0.28, -h * 0.22, w * 0.40, -h * 0.08);
+        ctx.bezierCurveTo(w * 0.50, -h * 0.06, w * 0.56, -h * 0.02, w * 0.60, 0);
+        ctx.bezierCurveTo(w * 0.56, h * 0.02, w * 0.50, h * 0.06, w * 0.40, h * 0.08);
+        ctx.quadraticCurveTo(w * 0.28, h * 0.22, w * 0.14, h * 0.14);
+        ctx.quadraticCurveTo(w * 0.02, h * 0.34, -w * 0.08, h * 0.12);
+        ctx.quadraticCurveTo(-w * 0.18, h * 0.26, -w * 0.30, h * 0.10);
+        ctx.bezierCurveTo(-w * 0.38, h * 0.22, -w * 0.48, h * 0.12, -w * 0.58, 0);
+        ctx.closePath();
+      };
+
       ctx.clearRect(0, 0, size, size);
       ctx.save();
       ctx.translate(cx, cy);
 
-      const gradient = ctx.createLinearGradient(-size * 0.34, 0, size * 0.34, 0);
-      gradient.addColorStop(0, "#17380E");
-      gradient.addColorStop(0.5, "#2E5A1C");
-      gradient.addColorStop(1, "#00FF66");
+      const gradient = ctx.createLinearGradient(-w, 0, w, 0);
+      gradient.addColorStop(0, "#009944");
+      gradient.addColorStop(0.28, "#00D65A");
+      gradient.addColorStop(0.54, "#B8FFD9");
+      gradient.addColorStop(0.78, "#00FF66");
+      gradient.addColorStop(1, "#00B84A");
+      ctx.shadowColor = "rgba(0,255,102,0.48)";
+      ctx.shadowBlur = size * 0.16;
+      tracePath();
       ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.moveTo(-size * 0.46, 0);
-      ctx.lineTo(-size * 0.10, -size * 0.10);
-      ctx.lineTo(size * 0.48, 0);
-      ctx.lineTo(-size * 0.10, size * 0.10);
-      ctx.closePath();
       ctx.fill();
 
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = "rgba(0,255,102,0.36)";
-      ctx.strokeStyle = "#E9FFE9";
-      ctx.lineWidth = 1.4;
+      ctx.shadowColor = "rgba(0,255,102,0.32)";
+      ctx.shadowBlur = size * 0.08;
+      tracePath();
+      ctx.strokeStyle = "rgba(255,255,255,0.98)";
+      ctx.lineWidth = size * 0.046;
       ctx.stroke();
+
       ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.34, 0);
+      ctx.bezierCurveTo(-w * 0.10, -h * 0.04, w * 0.12, -h * 0.02, w * 0.36, 0);
+      ctx.strokeStyle = "rgba(255,255,255,0.42)";
+      ctx.lineWidth = size * 0.018;
+      ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(-size * 0.24, 0);
-      ctx.lineTo(size * 0.28, 0);
-      ctx.strokeStyle = "rgba(255,255,255,0.28)";
-      ctx.lineWidth = 0.9;
+      ctx.moveTo(-w * 0.06, -h * 0.02);
+      ctx.quadraticCurveTo(w * 0.08, -h * 0.12, w * 0.22, -h * 0.06);
+      ctx.moveTo(-w * 0.04, h * 0.02);
+      ctx.quadraticCurveTo(w * 0.10, h * 0.12, w * 0.22, h * 0.06);
+      ctx.strokeStyle = "rgba(255,255,255,0.26)";
+      ctx.lineWidth = size * 0.012;
       ctx.stroke();
       ctx.restore();
     }
 
     paintOrangePetal(ctx, size) {
-      this.paintCommaPetal(ctx, size, {
-        inner: "#A83810",
-        mid: "#FF7F50",
-        outer: "#D9A63A",
-        stroke: "#FFF1D0",
-        glow: "rgba(255,127,80,0.36)",
-        coreLine: "rgba(255,253,208,0.22)",
-      }, {
-        width: size * 0.82,
-        height: size * 0.43,
-      });
-    }
-
-    paintGlowPetal(ctx, size, time) {
-      const wave = (Math.sin(time / 500) + 1) * 0.5;
-      const mixA = wave;
-      const mixB = 1 - wave;
-
-      const lerpColor = (a, b, t) => {
-        const pa = parseInt(a.slice(1), 16);
-        const pb = parseInt(b.slice(1), 16);
-        const ar = (pa >> 16) & 255, ag = (pa >> 8) & 255, ab = pa & 255;
-        const br = (pb >> 16) & 255, bg = (pb >> 8) & 255, bb = pb & 255;
-        const r = Math.round(ar + (br - ar) * t);
-        const g = Math.round(ag + (bg - ag) * t);
-        const b2 = Math.round(ab + (bb - ab) * t);
-        return `rgb(${r},${g},${b2})`;
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const w = size * 0.58;
+      const h = size * 0.26;
+      const tracePath = () => {
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.54, h * 0.02);
+        ctx.bezierCurveTo(-w * 0.46, -h * 0.82, -w * 0.02, -h * 0.98, w * 0.28, -h * 0.28);
+        ctx.bezierCurveTo(w * 0.48, -h * 0.06, w * 0.52, h * 0.12, w * 0.16, h * 0.34);
+        ctx.bezierCurveTo(-w * 0.06, h * 0.48, -w * 0.22, h * 0.74, -w * 0.42, h * 0.36);
+        ctx.bezierCurveTo(-w * 0.50, h * 0.20, -w * 0.58, h * 0.06, -w * 0.54, h * 0.02);
+        ctx.closePath();
       };
 
-      const c1 = lerpColor(Palette.darkRed, Palette.gold, mixA);
-      const c2 = lerpColor(Palette.velvet, Palette.white, mixB);
-      const c3 = lerpColor(Palette.brightRed, Palette.white, mixA * 0.5 + 0.25);
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.translate(cx, cy);
 
-      this.paintCommaPetal(ctx, size, {
-        inner: c2,
-        mid: c1,
-        outer: c3,
-        stroke: "#FFFFFF",
-        glow: "rgba(255,255,255,0.45)",
-        coreLine: "rgba(255,255,255,0.32)",
-      }, {
-        width: size * 0.88,
-        height: size * 0.46,
-        shadowBlur: 15,
-      });
+      const fill = ctx.createRadialGradient(-w * 0.10, -h * 0.04, 0, -w * 0.04, 0, w * 0.86);
+      fill.addColorStop(0, "rgba(255,246,238,0.98)");
+      fill.addColorStop(0.22, "rgba(255,228,214,0.84)");
+      fill.addColorStop(0.50, "#FF7F50");
+      fill.addColorStop(1, "#C95A34");
+
+      ctx.shadowColor = "rgba(255,127,80,0.48)";
+      ctx.shadowBlur = size * 0.16;
+      tracePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      ctx.save();
+      tracePath();
+      ctx.clip();
+      const edgeGlow = ctx.createLinearGradient(-w, -h, w, h);
+      edgeGlow.addColorStop(0, "rgba(255,255,255,0.46)");
+      edgeGlow.addColorStop(0.44, "rgba(255,255,255,0.12)");
+      edgeGlow.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = edgeGlow;
+      ctx.fillRect(-size, -size, size * 2, size * 2);
+      ctx.restore();
+
+      ctx.shadowColor = "rgba(255,164,116,0.30)";
+      ctx.shadowBlur = size * 0.07;
+      tracePath();
+      ctx.lineWidth = size * 0.046;
+      ctx.strokeStyle = "rgba(255,255,255,0.98)";
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.22, h * 0.04);
+      ctx.bezierCurveTo(-w * 0.04, -h * 0.18, w * 0.12, -h * 0.14, w * 0.20, -h * 0.02);
+      ctx.bezierCurveTo(w * 0.04, h * 0.04, -w * 0.02, h * 0.14, -w * 0.14, h * 0.16);
+      ctx.lineWidth = size * 0.016;
+      ctx.strokeStyle = "rgba(255,255,255,0.34)";
+      ctx.stroke();
+
+      ctx.restore();
     }
 
-    updateGlowSprite() {
-      const now = Date.now();
-      if (now - this.glowSpriteLastUpdate < 90) {
-        return;
+    isPerformanceTunedDifficulty() {
+      return this.difficulty === "hard" || this.difficulty === "lunatic";
+    }
+
+    getEnemyCollisionScale() {
+      return this.isPerformanceTunedDifficulty() ? 1.25 : 1;
+    }
+
+    shouldSkipEnemySpawn(color) {
+      if (!this.isPerformanceTunedDifficulty() || color === "ROSE_MOTHER") {
+        return false;
       }
-      this.glowSpriteLastUpdate = now;
-      this.paintGlowPetal(this.spriteCache.glowPetal.ctx, this.spriteCache.glowPetal.size, now);
+
+      this.enemySpawnAccumulator += 0.7;
+      if (this.enemySpawnAccumulator < 1) {
+        return true;
+      }
+
+      this.enemySpawnAccumulator -= 1;
+      return false;
     }
 
     spawnBullet(x, y, vx, vy, radius, color, damage = 1, behavior = null) {
+      if (this.shouldSkipEnemySpawn(color)) {
+        return -1;
+      }
       return this.spawnFromPool(this.enemyPool, x, y, vx, vy, radius, color, damage, behavior);
     }
 
@@ -326,6 +506,8 @@
       pool.param1[slot] = behavior?.param1 ?? 0;
       pool.param2[slot] = behavior?.param2 ?? 0;
       pool.param3[slot] = behavior?.param3 ?? 0;
+      pool.angleOffset[slot] = behavior?.angleOffset ?? 0;
+      pool.spinSpeed[slot] = behavior?.spinSpeed ?? 0;
       pool.active[slot] = 1;
       pool.grazed[slot] = 0;
 
@@ -346,11 +528,11 @@
       this.updateEnemyBullets(deltaTime, player);
       this.updatePlayerBullets(deltaTime, enemyManager, bossController, player);
       this.updateBurstFx(deltaTime);
-      this.updateGlowSprite();
     }
 
     updateEnemyBullets(deltaTime, player) {
       const pool = this.enemyPool;
+      const collisionScale = this.getEnemyCollisionScale();
       let i = 0;
 
       while (i < pool.count) {
@@ -368,6 +550,7 @@
 
         pool.x[slot] += pool.vx[slot] * deltaTime * this.globalSpeedScale;
         pool.y[slot] += pool.vy[slot] * deltaTime * this.globalSpeedScale;
+        pool.angleOffset[slot] += pool.spinSpeed[slot] * deltaTime;
 
         if (this.isOutOfBounds(pool.x[slot], pool.y[slot])) {
           this.recycle(pool, slot);
@@ -382,13 +565,14 @@
         const dx = pool.x[slot] - player.x;
         const dy = pool.y[slot] - player.y;
         const distance = Math.hypot(dx, dy);
+        const hitRadius = pool.radius[slot] * collisionScale;
 
-        if (distance < player.deathRadius + pool.radius[slot]) {
+        if (distance < player.deathRadius + hitRadius) {
           player.takeDamage(slot);
           continue;
         }
 
-        if (!pool.grazed[slot] && distance < player.grazeRadius + pool.radius[slot]) {
+        if (!pool.grazed[slot] && distance < player.grazeRadius + hitRadius) {
           pool.grazed[slot] = 1;
           player.triggerGraze();
           if (this.audioManager) {
@@ -476,7 +660,19 @@
 
       for (let i = 0; i < count; i += 1) {
         const angle = startAngle + step * i;
-        this.spawnBullet(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 6, "PETAL_DARK");
+        this.spawnBullet(
+          x,
+          y,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed,
+          6,
+          "PETAL_DARK",
+          1,
+          {
+            angleOffset: Math.random() * Math.PI * 2,
+            spinSpeed: 1.2,
+          }
+        );
       }
     }
 
@@ -626,6 +822,8 @@
       pool.param1[slot] = 0;
       pool.param2[slot] = 0;
       pool.param3[slot] = 0;
+      pool.angleOffset[slot] = 0;
+      pool.spinSpeed[slot] = 0;
       pool.freeIndices[pool.freeTop] = slot;
       pool.freeTop += 1;
     }
@@ -643,43 +841,107 @@
         const y = this.enemyPool.y[slot];
         const radius = this.enemyPool.radius[slot];
         const color = this.enemyPool.colors[slot];
+        const spec = this.resolveEnemyRenderSpec(slot);
 
-        switch (color) {
-          case "PETAL_DARK":
-            this.drawCachedSprite(ctx, this.spriteCache.darkPetal.canvas, x, y, this.enemyPool.vx[slot], this.enemyPool.vy[slot], radius + 12);
-            break;
-          case "PETAL_WHITE":
-            this.drawCachedSprite(ctx, this.spriteCache.whitePetal.canvas, x, y, this.enemyPool.vx[slot], this.enemyPool.vy[slot], radius + 6);
-            break;
-          case "LEAF_VERDANT":
-            this.drawCachedSprite(ctx, this.spriteCache.leafPetal.canvas, x, y, this.enemyPool.vx[slot], this.enemyPool.vy[slot], radius + 11);
-            break;
-          case "PETAL_ORANGE":
-            this.drawCachedSprite(ctx, this.spriteCache.orangePetal.canvas, x, y, this.enemyPool.vx[slot], this.enemyPool.vy[slot], radius + 10);
-            break;
-          case "ROSE_GLOW":
-            this.drawCachedSprite(ctx, this.spriteCache.glowPetal.canvas, x, y, this.enemyPool.vx[slot], this.enemyPool.vy[slot], radius + 12, true);
-            break;
-          case "ROSE_MOTHER":
-            this.drawRoseBloom(ctx, x, y, this.enemyPool.vx[slot], this.enemyPool.vy[slot], radius * 1.5);
-            break;
-          default:
-            ctx.beginPath();
-            ctx.fillStyle = color;
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fill();
-            break;
+        if (spec?.roseBloom) {
+          this.drawRoseBloom(ctx, x, y, this.enemyPool.vx[slot], this.enemyPool.vy[slot], spec.size);
+          continue;
         }
+
+        if (spec?.sprite) {
+          this.drawCachedSprite(
+            ctx,
+            spec.sprite,
+            x,
+            y,
+            spec.size,
+            this.getEnemyRenderAngle(slot),
+            spec.composite
+          );
+          continue;
+        }
+
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
-    drawCachedSprite(ctx, sprite, x, y, vx, vy, size, lighter = false) {
-      const angle = Math.atan2(vy || 0.0001, vx || 0.0001);
+    resolveEnemyRenderSpec(slot) {
+      const radius = this.enemyPool.radius[slot];
+      const color = this.enemyPool.colors[slot];
+      const behaviorType = this.enemyPool.behaviorType[slot];
+      const visualScale = 1.5;
+
+      if (color === "ROSE_MOTHER") {
+        return { roseBloom: true, size: radius * 1.5 };
+      }
+
+      if (behaviorType === BulletBehavior.RETARGET_ONCE || color === "ROSE_GILDED") {
+        return {
+          sprite: this.spriteCache.gildedDiamond.canvas,
+          size: (radius + 12) * visualScale,
+        };
+      }
+
+      if (
+        color === "PETAL_DARK" ||
+        color === Palette.darkRed ||
+        color === Palette.velvet ||
+        color === Palette.brightRed
+      ) {
+        return {
+          sprite: this.spriteCache.darkPetal.canvas,
+          size: (radius + 12) * visualScale,
+        };
+      }
+
+      if (color === "PETAL_WHITE" || color === Palette.white || color === Palette.moon || color === "#FFFFFF") {
+        return {
+          sprite: this.spriteCache.whitePetal.canvas,
+          size: (radius + 6) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "LEAF_VERDANT" || color === Palette.leaf || color === Palette.leafLight || color === "#00FF66") {
+        return {
+          sprite: this.spriteCache.leafPetal.canvas,
+          size: (radius + 11) * visualScale,
+        };
+      }
+
+      if (
+        color === "PETAL_ORANGE" ||
+        color === "PETAL_GOLD" ||
+        color === Palette.orange ||
+        color === Palette.amber ||
+        color === Palette.gold ||
+        color === Palette.antiqueGold
+      ) {
+        return {
+          sprite: this.spriteCache.orangePetal.canvas,
+          size: (radius + 10) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      return null;
+    }
+
+    getEnemyRenderAngle(slot) {
+      const vx = this.enemyPool.vx[slot];
+      const vy = this.enemyPool.vy[slot];
+      return Math.atan2(vy || 0.0001, vx || 0.0001) + this.enemyPool.angleOffset[slot];
+    }
+
+    drawCachedSprite(ctx, sprite, x, y, size, angle, composite = null) {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(angle);
-      if (lighter) {
-        ctx.globalCompositeOperation = "lighter";
+      if (composite) {
+        ctx.globalCompositeOperation = composite;
       }
       ctx.drawImage(sprite, -size * 0.5, -size * 0.5, size, size);
       ctx.restore();
@@ -740,7 +1002,7 @@
           : i % 2 === 0
             ? this.spriteCache.darkPetal.canvas
             : this.spriteCache.orangePetal.canvas;
-        const petalSize = size * (1.0 - i * 0.05);
+        const petalSize = size * 1.5 * (1.0 - i * 0.05);
         ctx.drawImage(sprite, -petalSize * 0.5, -petalSize * 0.5, petalSize, petalSize);
         ctx.restore();
       }
@@ -748,7 +1010,7 @@
       for (let leaf = 0; leaf < 3; leaf += 1) {
         ctx.save();
         ctx.rotate((Math.PI * 2 * leaf) / 3 + Math.PI / 3);
-        const leafSize = size * 0.58;
+        const leafSize = size * 0.88;
         ctx.drawImage(this.spriteCache.leafPetal.canvas, -leafSize * 0.5, -leafSize * 0.2, leafSize, leafSize);
         ctx.restore();
       }
