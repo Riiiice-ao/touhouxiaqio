@@ -40,6 +40,7 @@
       if (this.introDialogueDone) {
         return false;
       }
+
       this.pauseForDialogue = true;
       this.dialogueManager.start(
         [
@@ -58,6 +59,7 @@
       if (this.bossDialogueDone) {
         return false;
       }
+
       this.pauseForDialogue = true;
       this.dialogueManager.start(
         [
@@ -146,9 +148,11 @@
     randomWaveInterval() {
       const base =
         MINION_WAVE_INTERVAL_MIN + Math.random() * (MINION_WAVE_INTERVAL_MAX - MINION_WAVE_INTERVAL_MIN);
+
       if (this.difficulty === "lunatic") {
         return base * 0.4;
       }
+
       return this.difficulty === "hard" ? base * 0.6 : base;
     }
 

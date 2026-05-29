@@ -45,13 +45,17 @@
   });
 
   ui.showStartMenu();
-  ui.setLoadingState(0, Object.keys(assetLoader.assetMap).length);
+  const assetCount = Object.keys(assetLoader.assetMap).length;
+  ui.setLoadingState(0, assetCount);
 
   assetLoader.loadAll((loadedCount, totalCount) => {
     ui.setLoadingState(loadedCount, totalCount);
-    if (loadedCount >= totalCount) {
-      gameState.assetsReady = true;
-    }
+  }).then(() => {
+    gameState.assetsReady = true;
+    ui.setLoadingState(assetCount, assetCount);
+  }).catch(() => {
+    gameState.assetsReady = true;
+    ui.setLoadingState(assetCount, assetCount);
   });
 
   let lastTime = performance.now();
@@ -76,8 +80,12 @@
       return;
     }
 
-    await audioManager.resume();
-    await audioManager.playTrack("stage");
+    try {
+      await audioManager.resume();
+      await audioManager.playTrack("stage");
+    } catch {
+      // audio permission or codec failure should not block the game start
+    }
 
     gameState.currentDifficulty = difficulty;
     gameState.scene = "playing";
@@ -132,7 +140,7 @@
     gameState.isPaused = false;
     ui.hideAllOverlayMenus();
     resetRunState();
-    audioManager.playTrack("stage");
+    audioManager.playTrack("stage").catch(() => {});
     stageManager.beginIntroDialogue();
   }
 
@@ -231,7 +239,7 @@
 
     if (stageManager.state === "BOSS_ENTRY" && !gameState.bossMusicStarted && !dialogueManager.active) {
       gameState.bossMusicStarted = true;
-      audioManager.playTrack("boss");
+      audioManager.playTrack("boss").catch(() => {});
     }
 
     if (gameState.scene !== "playing" || gameState.isPaused || dialogueManager.active || stageManager.pauseForDialogue) {
@@ -301,7 +309,7 @@
     bombEffect.render(ctx);
   }
 
-  function drawBackground(now) {
+  function drawBackground() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     const bgImage = assetLoader.get("bgLayer");
