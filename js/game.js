@@ -19,6 +19,7 @@
   const enemyManager = new global.EnemyManager(emitter, assetLoader);
   enemyManager.setItemManager(itemManager);
   const bossController = new global.BossController(emitter, bulletManager, bombEffect, assetLoader);
+  bossController.setItemManager(itemManager);
   const stageManager = new global.StageManager(enemyManager, bossController, bulletManager, dialogueManager);
   const player = new global.Player(input, bulletManager, hud, bombEffect, assetLoader);
 
@@ -169,6 +170,16 @@
     ui.showScoreBoard(buildScoreResult(true));
   }
 
+  function showBossEscapeBoard() {
+    gameState.scene = "score";
+    gameState.isPaused = true;
+    bulletManager.clearEnemyBullets();
+    itemManager.clearAll();
+    bossController.active = false;
+    audioManager.stopMusic();
+    ui.showScoreBoard(buildScoreResult(false));
+  }
+
   function backToMainMenu() {
     gameState.scene = "menu";
     gameState.isPaused = false;
@@ -258,6 +269,11 @@
     if (stageManager.state === "CLEAR") {
       itemManager.spawnBossRewardBurst(bossController.x || 300, bossController.y || 160, 30);
       showGameClearBoard();
+      return;
+    }
+
+    if (stageManager.state === "TIMEOUT_CLEAR") {
+      showBossEscapeBoard();
       return;
     }
 

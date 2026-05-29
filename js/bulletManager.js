@@ -119,14 +119,14 @@
 
       const cache = {
         darkPetal: createCanvas(144),
-        gildedDiamond: createCanvas(132),
+        bubbleOrb: createCanvas(264),
         whitePetal: createCanvas(84),
         leafPetal: createCanvas(114),
         orangePetal: createCanvas(126),
       };
 
       this.paintDarkPetal(cache.darkPetal.ctx, cache.darkPetal.size);
-      this.paintGildedDiamond(cache.gildedDiamond.ctx, cache.gildedDiamond.size);
+      this.paintBubbleOrb(cache.bubbleOrb.ctx, cache.bubbleOrb.size);
       this.paintWhitePetal(cache.whitePetal.ctx, cache.whitePetal.size);
       this.paintLeafPetal(cache.leafPetal.ctx, cache.leafPetal.size);
       this.paintOrangePetal(cache.orangePetal.ctx, cache.orangePetal.size);
@@ -201,66 +201,72 @@
       ctx.restore();
     }
 
-    paintGildedDiamond(ctx, size) {
+    paintBubbleOrb(ctx, size) {
       const cx = size * 0.5;
       const cy = size * 0.5;
-      const w = size * 0.24;
-      const h = size * 0.44;
-      const tracePath = () => {
-        ctx.beginPath();
-        ctx.moveTo(0, -h);
-        ctx.bezierCurveTo(w * 0.18, -h * 0.74, w * 0.40, -h * 0.36, w * 0.48, 0);
-        ctx.bezierCurveTo(w * 0.40, h * 0.36, w * 0.18, h * 0.74, 0, h);
-        ctx.bezierCurveTo(-w * 0.18, h * 0.74, -w * 0.40, h * 0.36, -w * 0.48, 0);
-        ctx.bezierCurveTo(-w * 0.40, -h * 0.36, -w * 0.18, -h * 0.74, 0, -h);
-        ctx.closePath();
-      };
+      const r = size * 0.33;
 
       ctx.clearRect(0, 0, size, size);
       ctx.save();
-      ctx.translate(cx, cy);
+      const fill = ctx.createLinearGradient(cx - r * 1.05, cy - r * 0.92, cx + r * 1.12, cy + r * 0.96);
+      fill.addColorStop(0, "hsla(350, 88%, 68%, 0.78)");
+      fill.addColorStop(0.18, "hsla(42, 96%, 66%, 0.72)");
+      fill.addColorStop(0.42, "hsla(198, 88%, 66%, 0.70)");
+      fill.addColorStop(0.66, "hsla(156, 82%, 62%, 0.70)");
+      fill.addColorStop(0.84, "hsla(265, 82%, 72%, 0.66)");
+      fill.addColorStop(1, "hsla(16, 95%, 70%, 0.74)");
 
-      const fill = ctx.createRadialGradient(0, -h * 0.12, 0, 0, 0, h * 1.08);
-      fill.addColorStop(0, "rgba(255,246,249,0.98)");
-      fill.addColorStop(0.18, "rgba(255,215,224,0.82)");
-      fill.addColorStop(0.45, "#D21F3C");
-      fill.addColorStop(1, "#7C0A18");
-
-      ctx.shadowColor = "rgba(255,215,0,0.54)";
-      ctx.shadowBlur = size * 0.18;
-      tracePath();
+      ctx.shadowColor = "rgba(120, 214, 255, 0.36)";
+      ctx.shadowBlur = 22;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fillStyle = fill;
       ctx.fill();
 
       ctx.save();
-      tracePath();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.clip();
-      const highlight = ctx.createLinearGradient(0, -h, 0, h);
-      highlight.addColorStop(0, "rgba(255,255,255,0.76)");
-      highlight.addColorStop(0.28, "rgba(255,255,255,0.22)");
-      highlight.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = highlight;
-      ctx.fillRect(-size, -size, size * 2, size * 2);
+      const sheen = ctx.createRadialGradient(
+        cx - r * 0.55,
+        cy - r * 0.52,
+        r * 0.02,
+        cx - r * 0.48,
+        cy - r * 0.46,
+        r * 0.48
+      );
+      sheen.addColorStop(0, "rgba(255,255,255,0.86)");
+      sheen.addColorStop(0.18, "rgba(255,255,255,0.28)");
+      sheen.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = sheen;
+      ctx.fillRect(0, 0, size, size);
+
+      const core = ctx.createRadialGradient(cx - r * 0.18, cy - r * 0.18, r * 0.06, cx, cy, r * 0.88);
+      core.addColorStop(0, "rgba(255,255,255,0.08)");
+      core.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = core;
+      ctx.fillRect(0, 0, size, size);
+
+      const halo = ctx.createRadialGradient(cx, cy, r * 0.42, cx, cy, r * 1.18);
+      halo.addColorStop(0, "rgba(255,255,255,0)");
+      halo.addColorStop(0.55, "rgba(94,194,255,0.05)");
+      halo.addColorStop(0.78, "rgba(255,120,208,0.08)");
+      halo.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = halo;
+      ctx.fillRect(0, 0, size, size);
       ctx.restore();
 
-      ctx.shadowColor = "rgba(255,215,0,0.46)";
-      ctx.shadowBlur = size * 0.14;
-      tracePath();
-      ctx.lineWidth = size * 0.078;
-      ctx.strokeStyle = "#FFD700";
-      ctx.stroke();
-
       ctx.shadowBlur = 0;
-      tracePath();
-      ctx.lineWidth = size * 0.024;
-      ctx.strokeStyle = "rgba(255,255,255,0.98)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.lineWidth = size * 0.010;
+      ctx.strokeStyle = "rgba(255,255,255,0.96)";
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(0, -h * 0.54);
-      ctx.lineTo(0, h * 0.54);
-      ctx.lineWidth = size * 0.018;
-      ctx.strokeStyle = "rgba(255,255,255,0.32)";
+      ctx.arc(cx - r * 0.32, cy - r * 0.34, r * 0.16, Math.PI * 0.15, Math.PI * 1.35);
+      ctx.lineWidth = size * 0.008;
+      ctx.strokeStyle = "rgba(255,255,255,0.64)";
       ctx.stroke();
 
       ctx.restore();
@@ -520,7 +526,7 @@
     update(deltaTime, player, enemyManager, bossController) {
       const threshold = this.difficulty === "lunatic" ? 360 : this.difficulty === "hard" ? 300 : 420;
       if (this.enemyPool.count > threshold) {
-        this.globalSpeedScale = 0.65;
+        this.globalSpeedScale = 0.95;
       } else {
         this.globalSpeedScale = 1;
       }
@@ -878,10 +884,19 @@
         return { roseBloom: true, size: radius * 1.5 };
       }
 
+      if (color === "AURORA_BUBBLE") {
+        return {
+          sprite: this.spriteCache.bubbleOrb.canvas,
+          size: (radius + 18) * 3.0,
+          composite: "lighter",
+        };
+      }
+
       if (behaviorType === BulletBehavior.RETARGET_ONCE || color === "ROSE_GILDED") {
         return {
-          sprite: this.spriteCache.gildedDiamond.canvas,
-          size: (radius + 12) * visualScale,
+          sprite: this.spriteCache.bubbleOrb.canvas,
+          size: (radius + 10) * 1.7,
+          composite: "lighter",
         };
       }
 
@@ -928,6 +943,17 @@
       }
 
       return null;
+    }
+
+    countEnemyBulletsByColor(color) {
+      const pool = this.enemyPool;
+      let count = 0;
+      for (let i = 0; i < pool.count; i += 1) {
+        if (pool.colors[pool.activeIndices[i]] === color) {
+          count += 1;
+        }
+      }
+      return count;
     }
 
     getEnemyRenderAngle(slot) {

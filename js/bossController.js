@@ -8,6 +8,7 @@
     BOSS_PHASE_THREE_THRESHOLD,
     BOSS_PHASE_TWO_THRESHOLD,
     BOSS_STOP_DURATION,
+    GAME_HEIGHT,
     GAME_WIDTH,
   } = global.Config;
 
@@ -35,12 +36,17 @@
     ],
   };
 
+  const PHASE_TIME_LIMIT = 180;
+  const TOTAL_BOSS_TIME_LIMIT = 540;
+  const EXIT_DURATION = 2;
+
   class BossController {
     constructor(emitter, bulletManager, bombEffect, assetLoader) {
       this.emitter = emitter;
       this.bulletManager = bulletManager;
       this.bombEffect = bombEffect;
       this.assetLoader = assetLoader;
+      this.itemManager = null;
       this.radius = 30;
       this.entrySpeed = 120;
       this.targetX = BOSS_ENTRY_X;
@@ -57,10 +63,24 @@
       this.difficultyHpMultiplier = difficulty === "lunatic" ? 1.5 : 1;
     }
 
+    setItemManager(itemManager) {
+      this.itemManager = itemManager;
+    }
+
     reset() {
       this.active = false;
       this.inBattle = false;
       this.defeated = false;
+      this.invulnerable = false;
+      this.timedOut = false;
+      this.escapeElapsed = 0;
+      this.escapeStartY = 0;
+      this.totalBattleTimer = 0;
+      this.phaseTimer = 0;
+      this.phaseRewardMask = 0;
+      this.phaseThreeBranchIndex = 0;
+      this.phaseThreeLaserTimer = 0;
+      this.phaseThreeLaserWall = 0;
       this.phase = 1;
       this.phaseName = "Scarlet Bloom";
       this.phaseBarColors = [Palette.moon, Palette.antiqueGold, Palette.crimson, Palette.velvet];
@@ -104,6 +124,11 @@
         return;
       }
 
+      if (this.timedOut) {
+        this.updateTimedDeparture(deltaTime);
+        return;
+      }
+
       this.updateBattle(deltaTime, player, audioAnalysis);
     }
 
@@ -126,6 +151,19 @@
     }
 
     updateBattle(deltaTime, player, audioAnalysis) {
+      this.totalBattleTimer += deltaTime;
+      this.phaseTimer += deltaTime;
+
+      if (this.totalBattleTimer >= TOTAL_BOSS_TIME_LIMIT) {
+        this.beginTimedDeparture();
+        return;
+      }
+
+      if (this.phaseTimer >= PHASE_TIME_LIMIT) {
+        this.forceNextPhase();
+        return;
+      }
+
       this.moveClock += deltaTime;
       this.updateMovementState(deltaTime);
 
@@ -135,6 +173,7 @@
       this.followTimer -= deltaTime;
       this.splitTimer -= deltaTime;
       this.randomTimer -= deltaTime;
+      this.phaseThreeLaserTimer = Math.max(0, this.phaseThreeLaserTimer - deltaTime);
       this.spriteTimer += deltaTime;
       this.updateSpriteState();
       if (this.spriteTimer >= 0.14) {
@@ -167,6 +206,19 @@
       }
 
       this.updatePhaseThreePatterns(player, audioAnalysis);
+    }
+
+    updateTimedDeparture(deltaTime) {
+      this.escapeElapsed += deltaTime;
+      const progress = Math.min(1, this.escapeElapsed / EXIT_DURATION);
+      const eased = 1 - (1 - progress) * (1 - progress);
+      this.y = this.escapeStartY + (-120 - this.escapeStartY) * eased;
+
+      if (progress >= 1) {
+        this.defeated = true;
+        this.active = false;
+        this.inBattle = false;
+      }
     }
 
     updateMovementState(deltaTime) {
@@ -277,25 +329,125 @@
 
       if (this.moveState === "moving") {
         if (this.followTimer <= 0) {
-          this.followTimer += lunatic ? 0.24 : hard ? 0.34 : 0.42;
-          this.emitter.fireRetargetFollower(this.x, this.y, player.x, player.y);
-          if (lunatic) {
-            this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 5, 16, 200, 6, "ROSE_GILDED");
-          }
+          this.followTimer += lunatic ? 0.26 : hard ? 0.36 : 0.44;
+          this.firePhaseThreePatternBranch(player, audioAnalysis);
         }
         return;
       }
 
       if (this.randomTimer <= 0) {
-        this.randomTimer += (lunatic ? 0.66 : hard ? 0.88 : 1.12) * (1.08 - audioAnalysis.musicFlow * 0.28);
-        const startAngle = Math.random() * 360;
-        this.emitter.fireDelayedRandomRing(this.x, this.y, lunatic ? 20 : hard ? 16 : 12, lunatic ? 158 : 146, startAngle);
-        if (hard) {
-          this.emitter.fireSplitBurstMother(this.x - 48, this.y + 10, 102);
-          this.emitter.fireSplitBurstMother(this.x + 48, this.y + 10, 78);
-        }
-        if (lunatic) {
-          this.emitter.fireAimedNWay(this.x, this.y, player.x, player.y, 7, 26, 208, 6, "ROSE_GILDED");
+        this.randomTimer += (lunatic ? 0.72 : hard ? 0.92 : 1.16) * (1.06 - audioAnalysis.musicFlow * 0.22);
+        this.firePhaseThreePatternBranch(player, audioAnalysis);
+      }
+    }
+
+    firePhaseThreePatternBranch(player, audioAnalysis) {
+      const branch = this.phaseThreeBranchIndex % 3;
+      this.phaseThreeBranchIndex += 1;
+
+      if (branch === 0) {
+        this.fireAuroraBubbleBranch(player);
+        return;
+      }
+
+      if (branch === 1) {
+        this.firePetalRainBranch(audioAnalysis);
+        return;
+      }
+
+      this.fireSideLaserBranch(player);
+    }
+
+    fireAuroraBubbleBranch(player) {
+      const currentBubbles = this.bulletManager.countEnemyBulletsByColor("AURORA_BUBBLE");
+      const overcrowded = currentBubbles >= 10;
+      const severeOvercrowd = currentBubbles >= 16;
+      let waveCount = this.difficulty === "lunatic" ? 6 : this.difficulty === "hard" ? 5 : 4;
+
+      if (severeOvercrowd) {
+        waveCount = Math.max(2, Math.ceil(waveCount * 0.5));
+      } else if (overcrowded) {
+        waveCount = Math.max(3, Math.ceil(waveCount * 0.7));
+      }
+
+      const baseAngle = this.emitter.getAngleToTarget(this.x, this.y, player.x, player.y);
+      const spread = 84;
+      const start = baseAngle - spread * 0.5;
+      const step = waveCount <= 1 ? 0 : spread / (waveCount - 1);
+
+      for (let i = 0; i < waveCount; i += 1) {
+        const angleDeg = start + step * i;
+        const rad = (angleDeg * Math.PI) / 180;
+        const speed = 52 + i * 4;
+        this.bulletManager.spawnBullet(
+          this.x,
+          this.y + 10,
+          Math.cos(rad) * speed,
+          Math.sin(rad) * speed,
+          15,
+          "AURORA_BUBBLE"
+        );
+      }
+    }
+
+    firePetalRainBranch(audioAnalysis) {
+      const flow = Math.max(0.2, audioAnalysis.musicFlow);
+      const ways = this.difficulty === "lunatic" ? 11 : this.difficulty === "hard" ? 9 : 7;
+      const spread = 112;
+      const speed = this.difficulty === "lunatic" ? 136 : 124;
+      this.emitter.fireNWay(this.x, this.y + 8, ways, spread, speed, 90, 7, "PETAL_DARK");
+
+      const splitCount = this.difficulty === "lunatic" ? 3 : 2;
+      for (let i = 0; i < splitCount; i += 1) {
+        const offset = splitCount === 1 ? 0 : (i - (splitCount - 1) * 0.5) * 34;
+        this.emitter.fireSplitBurstMother(this.x + offset, this.y + 8, 84 + i * 12);
+      }
+
+      const rainWays = this.difficulty === "lunatic" ? 8 : 6;
+      for (let i = 0; i < rainWays; i += 1) {
+        const angleDeg = 72 + i * (36 / Math.max(1, rainWays - 1));
+        const rad = (angleDeg * Math.PI) / 180;
+        const speedRain = 72 + flow * 10;
+        this.bulletManager.spawnBullet(
+          this.x,
+          this.y + 12,
+          Math.cos(rad) * speedRain,
+          Math.sin(rad) * speedRain,
+          6,
+          "PETAL_DARK",
+          1,
+          {
+            type: global.BulletBehavior.PETAL_RAIN,
+            param0: 28,
+            param1: 5.8,
+            param2: 26,
+            angleOffset: Math.random() * Math.PI * 2,
+            spinSpeed: 1.2,
+          }
+        );
+      }
+    }
+
+    fireSideLaserBranch(player) {
+      this.phaseThreeLaserTimer = 1.15;
+      this.phaseThreeLaserWall = player.x < this.x ? -1 : 1;
+
+      const lanes = [
+        this.x - 148,
+        this.x + 148,
+      ];
+
+      for (let side = 0; side < lanes.length; side += 1) {
+        const x = lanes[side];
+        for (let i = 0; i < 14; i += 1) {
+          this.bulletManager.spawnBullet(
+            x,
+            36 + i * 34,
+            side === 0 ? 6 : -6,
+            8,
+            9,
+            "PETAL_WHITE"
+          );
         }
       }
     }
@@ -315,6 +467,9 @@
 
     enterPhase(phase) {
       this.phase = phase;
+      this.phaseTimer = 0;
+      this.phaseRewardMask = 0;
+      this.invulnerable = false;
 
       if (phase === 2) {
         this.phaseName = "Rose Explosion";
@@ -340,10 +495,102 @@
       this.followTimer = 0.32;
       this.splitTimer = 0.45;
       this.randomTimer = 0.55;
+      this.phaseThreeBranchIndex = 0;
+      this.phaseThreeLaserTimer = 0;
+      this.phaseThreeLaserWall = 0;
+    }
+
+    forceNextPhase() {
+      this.bulletManager.clearEnemyBullets();
+
+      if (this.phase < 3) {
+        this.enterPhase(this.phase + 1);
+        return;
+      }
+
+      this.beginTimedDeparture();
+    }
+
+    beginTimedDeparture() {
+      if (this.timedOut) {
+        return;
+      }
+
+      this.timedOut = true;
+      this.invulnerable = true;
+      this.escapeElapsed = 0;
+      this.escapeStartY = this.y;
+      this.bulletManager.clearEnemyBullets();
+      this.bombEffect.start(this.x, this.y, "Time Up", {
+        clearsBullets: false,
+        overlayAlpha: 0.22,
+        ringColor: "255, 215, 0",
+        shadowColor: "rgba(255,215,0,0.45)",
+        textColor: "rgba(255,253,208,0.96)",
+      });
+    }
+
+    rewardPhaseThresholdCrossings(previousRatio, nextRatio) {
+      const thresholds = [2 / 3, 1 / 3];
+      for (let i = 0; i < thresholds.length; i += 1) {
+        const threshold = thresholds[i];
+        const bit = 1 << i;
+        if ((this.phaseRewardMask & bit) !== 0) {
+          continue;
+        }
+        if (previousRatio > threshold && nextRatio <= threshold && this.phaseTimer <= PHASE_TIME_LIMIT) {
+          this.phaseRewardMask |= bit;
+          this.spawnPhasePressureReward();
+        }
+      }
+    }
+
+    spawnPhasePressureReward() {
+      if (!this.itemManager) {
+        return;
+      }
+
+      const pointCount = 5 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < pointCount; i += 1) {
+        const angle = -Math.PI * 0.92 + (Math.PI * 1.84 * i) / Math.max(1, pointCount - 1);
+        const speed = 82 + Math.random() * 48;
+        this.itemManager.spawnItem(
+          1,
+          this.x,
+          this.y,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed - 82
+        );
+      }
+
+      if (Math.random() < 0.1) {
+        this.itemManager.spawnItem(2, this.x, this.y, (Math.random() - 0.5) * 36, -166);
+      }
+    }
+
+    spawnFinalVictoryReward() {
+      if (!this.itemManager) {
+        return;
+      }
+
+      for (let i = 0; i < 40; i += 1) {
+        const angle = (Math.PI * 2 * i) / 40 + Math.random() * 0.22;
+        const speed = 92 + Math.random() * 128;
+        this.itemManager.spawnItem(
+          1,
+          this.x,
+          this.y,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed - 104
+        );
+      }
+
+      this.itemManager.spawnItem(2, this.x - 14, this.y - 4, -28, -188);
+      this.itemManager.spawnItem(2, this.x + 14, this.y - 4, 28, -188);
     }
 
     checkBulletHit(x, y, radius, damage, player) {
-      if (!this.active || !this.inBattle || this.defeated) {
+      if (!this.active || !this.inBattle || this.defeated || this.invulnerable || this.timedOut) {
         return false;
       }
 
@@ -355,12 +602,15 @@
         return false;
       }
 
+      const previousRatio = global.HealthSystem.getRatio(this);
       if (global.HealthSystem.damageEntity(this, damage)) {
         this.defeated = true;
         this.active = false;
         this.inBattle = false;
+        this.spawnFinalVictoryReward();
         player.addScore(5000);
       } else {
+        this.rewardPhaseThresholdCrossings(previousRatio, global.HealthSystem.getRatio(this));
         this.updatePhaseByHealth();
       }
 
@@ -412,10 +662,12 @@
       }
 
       const width = 360;
-      const height = 16;
+      const height = 12;
       const x = (GAME_WIDTH - width) * 0.5;
       const y = 22;
       const ratio = global.HealthSystem.getRatio(this);
+      const phaseRemain = Math.max(0, PHASE_TIME_LIMIT - this.phaseTimer);
+      const remainText = `${Math.ceil(phaseRemain)}s`;
 
       ctx.save();
       ctx.fillStyle = "rgba(18, 8, 14, 0.74)";
@@ -436,7 +688,7 @@
       ctx.fillRect(x, y, width * ratio, height);
 
       ctx.strokeStyle = "rgba(255, 230, 210, 0.72)";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1;
       ctx.strokeRect(x, y, width, height);
 
       ctx.fillStyle = Palette.moon;
@@ -444,6 +696,28 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
       ctx.fillText(`${this.phaseName}  HP`, GAME_WIDTH * 0.5, y - 4);
+
+      ctx.fillStyle = "rgba(255,253,208,0.88)";
+      ctx.font = '12px monospace';
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`P${this.phase} ${remainText}`, x + width, y - 4);
+
+      if (this.phase === 3 && this.phaseThreeLaserTimer > 0) {
+        const laserAlpha = Math.min(1, this.phaseThreeLaserTimer / 0.25) * 0.78;
+        const leftX = this.x - 148;
+        const rightX = this.x + 148;
+        for (const lx of [leftX, rightX]) {
+          const beam = ctx.createLinearGradient(lx - 8, 0, lx + 8, 0);
+          beam.addColorStop(0, `rgba(255,255,255,0)`);
+          beam.addColorStop(0.35, `rgba(255,255,255,${laserAlpha * 0.75})`);
+          beam.addColorStop(0.5, `rgba(255,253,208,${laserAlpha})`);
+          beam.addColorStop(0.65, `rgba(255,255,255,${laserAlpha * 0.75})`);
+          beam.addColorStop(1, `rgba(255,255,255,0)`);
+          ctx.fillStyle = beam;
+          ctx.fillRect(lx - 8, 0, 16, GAME_HEIGHT);
+        }
+      }
       ctx.restore();
     }
   }

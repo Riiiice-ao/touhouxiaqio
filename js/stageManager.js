@@ -105,8 +105,8 @@
       if (this.state === "BOSS_STAGE") {
         this.bossController.update(deltaTime, player);
         if (this.bossController.defeated) {
-          this.state = "CLEAR";
-          this.bannerText = "STAGE CLEAR";
+          this.state = this.bossController.timedOut ? "TIMEOUT_CLEAR" : "CLEAR";
+          this.bannerText = this.bossController.timedOut ? "BOSS ESCAPED" : "STAGE CLEAR";
           this.bannerTimer = 2.5;
           this.clearTimer = 2.5;
           this.bulletManager.clearEnemyBullets();
@@ -114,7 +114,7 @@
         return;
       }
 
-      if (this.state === "CLEAR") {
+      if (this.state === "CLEAR" || this.state === "TIMEOUT_CLEAR") {
         this.clearTimer = Math.max(0, this.clearTimer - deltaTime);
       }
     }
