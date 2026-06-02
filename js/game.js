@@ -248,7 +248,11 @@
   function update(deltaTime) {
     const audioAnalysis = audioManager.update(deltaTime);
 
-    if (stageManager.state === "BOSS_ENTRY" && !gameState.bossMusicStarted && !dialogueManager.active) {
+    if (
+      (stageManager.stagePhase === "MID_BOSS_ENTRY" || stageManager.stagePhase === "BOSS_ENTRY") &&
+      !gameState.bossMusicStarted &&
+      !dialogueManager.active
+    ) {
       gameState.bossMusicStarted = true;
       audioManager.playTrack("boss").catch(() => {});
     }
@@ -259,20 +263,20 @@
 
     updateBackground(deltaTime);
     player.update(deltaTime);
-    stageManager.update(deltaTime, player);
-    bossController.update(deltaTime, player, audioAnalysis);
+    stageManager.update(deltaTime, player, audioAnalysis);
     bulletManager.update(deltaTime, player, enemyManager, bossController);
     itemManager.update(deltaTime, player);
     bombEffect.update(deltaTime, bulletManager);
     updateBodyCollisions();
 
-    if (stageManager.state === "CLEAR") {
-      itemManager.spawnBossRewardBurst(bossController.x || 300, bossController.y || 160, 30);
+    if (stageManager.state === "CLEAR" && stageManager.clearTimer <= 0 && !stageManager.clearHandled) {
+      stageManager.clearHandled = true;
       showGameClearBoard();
       return;
     }
 
-    if (stageManager.state === "TIMEOUT_CLEAR") {
+    if (stageManager.state === "TIMEOUT_CLEAR" && stageManager.clearTimer <= 0 && !stageManager.clearHandled) {
+      stageManager.clearHandled = true;
       showBossEscapeBoard();
       return;
     }

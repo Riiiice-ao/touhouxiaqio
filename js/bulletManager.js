@@ -13,6 +13,10 @@
     SPLIT_BURST: 2,
     DELAYED_RANDOM: 3,
     PETAL_RAIN: 4,
+    DELAY_STASIS: 5,
+    REFLECT_BOUND: 6,
+    ORBITAL_SATELLITE: 7,
+    BUBBLE_SINE: 8,
   };
 
   global.BulletBehavior = BulletBehavior;
@@ -41,6 +45,14 @@
       this.spriteCache = this.initBulletSprites();
       this.burstFx = this.createBurstFxPool(32);
       this.enemySpawnAccumulator = 0;
+      this.gravityWell = {
+        active: false,
+        x: 0,
+        y: 0,
+        strength: 0,
+        radius: 0,
+        timer: 0,
+      };
     }
 
     setDifficulty(difficulty) {
@@ -64,6 +76,8 @@
         param1: new Float32Array(capacity),
         param2: new Float32Array(capacity),
         param3: new Float32Array(capacity),
+        originX: new Float32Array(capacity),
+        originY: new Float32Array(capacity),
         angleOffset: new Float32Array(capacity),
         spinSpeed: new Float32Array(capacity),
         active: new Uint8Array(capacity),
@@ -118,6 +132,18 @@
       };
 
       const cache = {
+        barrierCyan: createCanvas(120),
+        barrierGold: createCanvas(120),
+        mediumGreen: createCanvas(78),
+        mediumRed: createCanvas(78),
+        ricePurple: createCanvas(96),
+        auroraBubbleFrames: [
+          createCanvas(300),
+          createCanvas(300),
+          createCanvas(300),
+          createCanvas(300),
+        ],
+        yinYangPetal: createCanvas(144),
         darkPetal: createCanvas(144),
         bubbleOrb: createCanvas(264),
         whitePetal: createCanvas(84),
@@ -125,6 +151,16 @@
         orangePetal: createCanvas(126),
       };
 
+      this.paintBoundaryOrb(cache.barrierCyan.ctx, cache.barrierCyan.size, "#00FFFF");
+      this.paintBoundaryOrb(cache.barrierGold.ctx, cache.barrierGold.size, "#FFD700");
+      this.paintMediumGlowOrb(cache.mediumGreen.ctx, cache.mediumGreen.size, "#00FF66");
+      this.paintMediumGlowOrb(cache.mediumRed.ctx, cache.mediumRed.size, "#FF1E2F");
+      this.paintRiceBullet(cache.ricePurple.ctx, cache.ricePurple.size);
+      this.paintAuroraBubble(cache.auroraBubbleFrames[0].ctx, cache.auroraBubbleFrames[0].size, 0);
+      this.paintAuroraBubble(cache.auroraBubbleFrames[1].ctx, cache.auroraBubbleFrames[1].size, 46);
+      this.paintAuroraBubble(cache.auroraBubbleFrames[2].ctx, cache.auroraBubbleFrames[2].size, 164);
+      this.paintAuroraBubble(cache.auroraBubbleFrames[3].ctx, cache.auroraBubbleFrames[3].size, 252);
+      this.paintYinYangPetal(cache.yinYangPetal.ctx, cache.yinYangPetal.size);
       this.paintDarkPetal(cache.darkPetal.ctx, cache.darkPetal.size);
       this.paintBubbleOrb(cache.bubbleOrb.ctx, cache.bubbleOrb.size);
       this.paintWhitePetal(cache.whitePetal.ctx, cache.whitePetal.size);
@@ -132,6 +168,237 @@
       this.paintOrangePetal(cache.orangePetal.ctx, cache.orangePetal.size);
 
       return cache;
+    }
+
+    paintBoundaryOrb(ctx, size, edgeColor) {
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const r = size * 0.30;
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.shadowColor = edgeColor;
+      ctx.shadowBlur = 15;
+
+      const glow = ctx.createRadialGradient(cx, cy, r * 0.18, cx, cy, r * 1.45);
+      glow.addColorStop(0, "rgba(255,255,255,0.96)");
+      glow.addColorStop(0.30, "rgba(255,255,255,0.88)");
+      glow.addColorStop(0.62, edgeColor);
+      glow.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.22, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      const core = ctx.createRadialGradient(cx - r * 0.18, cy - r * 0.20, 0, cx, cy, r);
+      core.addColorStop(0, "#FFFFFF");
+      core.addColorStop(0.22, "rgba(255,255,255,0.98)");
+      core.addColorStop(0.68, edgeColor);
+      core.addColorStop(1, "rgba(255,255,255,0.82)");
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.lineWidth = Math.max(1, size * 0.018);
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,255,0.68)";
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.34, cy - r * 0.36, r * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    paintMediumGlowOrb(ctx, size, edgeColor) {
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const r = size * 0.29;
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.shadowColor = edgeColor;
+      ctx.shadowBlur = 15;
+      const outer = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r * 1.35);
+      outer.addColorStop(0, "#FFFFFF");
+      outer.addColorStop(0.24, "rgba(255,255,255,0.96)");
+      outer.addColorStop(0.70, edgeColor);
+      outer.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = outer;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.15, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      const core = ctx.createRadialGradient(cx - r * 0.24, cy - r * 0.22, 0, cx, cy, r);
+      core.addColorStop(0, "#FFFFFF");
+      core.addColorStop(0.36, "rgba(255,255,255,0.95)");
+      core.addColorStop(1, edgeColor);
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.lineWidth = Math.max(1, size * 0.016);
+      ctx.strokeStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    paintRiceBullet(ctx, size) {
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const w = size * 0.56;
+      const h = size * 0.16;
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.shadowColor = "rgba(178, 92, 255, 0.56)";
+      ctx.shadowBlur = 13;
+      const gradient = ctx.createLinearGradient(-w * 0.55, 0, w * 0.55, 0);
+      gradient.addColorStop(0, "rgba(178,92,255,0.42)");
+      gradient.addColorStop(0.16, "#FFFFFF");
+      gradient.addColorStop(0.50, "#FFFFFF");
+      gradient.addColorStop(0.84, "#FFFFFF");
+      gradient.addColorStop(1, "rgba(178,92,255,0.42)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.62, 0);
+      ctx.quadraticCurveTo(-w * 0.30, -h, 0, -h);
+      ctx.quadraticCurveTo(w * 0.34, -h, w * 0.62, 0);
+      ctx.quadraticCurveTo(w * 0.34, h, 0, h);
+      ctx.quadraticCurveTo(-w * 0.30, h, -w * 0.62, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(224,200,255,0.82)";
+      ctx.lineWidth = size * 0.018;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    paintAuroraBubble(ctx, size, hueShift = 0) {
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const r = size * 0.31;
+      const h = (hue) => (hue + hueShift + 360) % 360;
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      const halo = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 1.45);
+      halo.addColorStop(0, "rgba(255,255,255,0)");
+      halo.addColorStop(0.40, "rgba(255,215,0,0.18)");
+      halo.addColorStop(0.63, "rgba(0,255,255,0.22)");
+      halo.addColorStop(0.84, "rgba(255,38,96,0.18)");
+      halo.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.42, 0, Math.PI * 2);
+      ctx.fill();
+
+      const fill = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.2, r * 0.08, cx, cy, r);
+      fill.addColorStop(0, "rgba(255,255,255,0.15)");
+      fill.addColorStop(0.38, "rgba(255,255,255,0.10)");
+      fill.addColorStop(0.68, `hsla(${h(198)},92%,66%,0.20)`);
+      fill.addColorStop(0.86, `hsla(${h(42)},96%,66%,0.26)`);
+      fill.addColorStop(1, `hsla(${h(350)},88%,68%,0.34)`);
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      const rim = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      rim.addColorStop(0, `hsl(${h(352)}, 100%, 68%)`);
+      rim.addColorStop(0.25, `hsl(${h(44)}, 100%, 62%)`);
+      rim.addColorStop(0.50, `hsl(${h(200)}, 100%, 66%)`);
+      rim.addColorStop(0.75, `hsl(${h(142)}, 100%, 58%)`);
+      rim.addColorStop(1, `hsl(${h(314)}, 100%, 72%)`);
+      ctx.shadowColor = "rgba(84,214,255,0.52)";
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = rim;
+      ctx.lineWidth = Math.max(2, size * 0.018);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(255,255,255,0.96)";
+      ctx.lineWidth = Math.max(1, size * 0.007);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.985, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(255,255,255,0.62)";
+      ctx.lineWidth = Math.max(1, size * 0.006);
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.28, cy - r * 0.32, r * 0.20, Math.PI * 0.16, Math.PI * 1.36);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    paintYinYangPetal(ctx, size) {
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const w = size * 0.70;
+      const h = size * 0.30;
+      const tracePath = () => {
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.50, h * 0.08);
+        ctx.bezierCurveTo(-w * 0.54, -h * 0.78, -w * 0.12, -h * 1.10, w * 0.24, -h * 0.34);
+        ctx.bezierCurveTo(w * 0.60, h * 0.20, w * 0.16, h * 0.55, -w * 0.08, h * 0.34);
+        ctx.bezierCurveTo(-w * 0.22, h * 0.74, -w * 0.50, h * 0.42, -w * 0.50, h * 0.08);
+        ctx.closePath();
+      };
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.shadowColor = "rgba(255,0,26,0.48)";
+      ctx.shadowBlur = size * 0.13;
+
+      const fill = ctx.createRadialGradient(-w * 0.16, -h * 0.10, 0, -w * 0.04, 0, w * 0.88);
+      fill.addColorStop(0, "rgba(255,230,234,0.95)");
+      fill.addColorStop(0.18, "#99001A");
+      fill.addColorStop(0.62, "#6F0717");
+      fill.addColorStop(1, "#4A0E17");
+      tracePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      ctx.save();
+      tracePath();
+      ctx.clip();
+      const highlight = ctx.createLinearGradient(-w * 0.42, -h * 0.58, w * 0.26, h * 0.36);
+      highlight.addColorStop(0, "rgba(255,255,255,0.58)");
+      highlight.addColorStop(0.38, "rgba(255,96,118,0.16)");
+      highlight.addColorStop(1, "rgba(74,14,23,0)");
+      ctx.fillStyle = highlight;
+      ctx.fillRect(-size, -size, size * 2, size * 2);
+      ctx.restore();
+
+      ctx.shadowBlur = size * 0.05;
+      tracePath();
+      ctx.strokeStyle = "rgba(255,244,246,0.92)";
+      ctx.lineWidth = size * 0.026;
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.26, h * 0.03);
+      ctx.bezierCurveTo(-w * 0.02, -h * 0.18, w * 0.18, -h * 0.10, w * 0.24, h * 0.04);
+      ctx.bezierCurveTo(w * 0.06, h * 0.04, -w * 0.04, h * 0.16, -w * 0.18, h * 0.17);
+      ctx.strokeStyle = "rgba(255,255,255,0.42)";
+      ctx.lineWidth = size * 0.014;
+      ctx.stroke();
+      ctx.restore();
     }
 
     paintDarkPetal(ctx, size) {
@@ -458,7 +725,7 @@
     }
 
     isPerformanceTunedDifficulty() {
-      return this.difficulty === "hard" || this.difficulty === "lunatic";
+      return this.difficulty === "lunatic";
     }
 
     getEnemyCollisionScale() {
@@ -466,17 +733,66 @@
     }
 
     shouldSkipEnemySpawn(color) {
-      if (!this.isPerformanceTunedDifficulty() || color === "ROSE_MOTHER") {
+      if (!this.isPerformanceTunedDifficulty() || color === "ROSE_MOTHER" || color === "AURORA_BUBBLE") {
         return false;
       }
 
-      this.enemySpawnAccumulator += 0.7;
+      const keepRatio = this.getLunaticSpawnKeepRatio(color);
+      if (keepRatio >= 0.995) {
+        return false;
+      }
+
+      this.enemySpawnAccumulator += keepRatio;
       if (this.enemySpawnAccumulator < 1) {
         return true;
       }
 
       this.enemySpawnAccumulator -= 1;
       return false;
+    }
+
+    getLunaticSpawnKeepRatio(color) {
+      if (color === "AURORA_BUBBLE") {
+        return this.getAuroraBubbleKeepRatio();
+      }
+
+      const densityStart = 460;
+      const densityCap = 1180;
+      const density = Math.max(0, Math.min(1, (this.enemyPool.count - densityStart) / (densityCap - densityStart)));
+      return 1 - density * 0.4;
+    }
+
+    getAuroraBubbleKeepRatio() {
+      let totalArea = 0;
+      const pool = this.enemyPool;
+      for (let i = 0; i < pool.count; i += 1) {
+        const slot = pool.activeIndices[i];
+        if (pool.colors[slot] === "AURORA_BUBBLE") {
+          totalArea += Math.PI * pool.radius[slot] * pool.radius[slot] * 4;
+        }
+      }
+
+      const screenArea = GAME_WIDTH * GAME_HEIGHT;
+      if (totalArea <= screenArea * 0.16) {
+        return 1;
+      }
+
+      const overload = Math.min(1, (totalArea - screenArea * 0.16) / (screenArea * 0.18));
+      return 1 - overload * 0.4;
+    }
+
+    activateGravityWell(x, y, strength, radius, duration) {
+      this.gravityWell.active = true;
+      this.gravityWell.x = x;
+      this.gravityWell.y = y;
+      this.gravityWell.strength = strength;
+      this.gravityWell.radius = radius;
+      this.gravityWell.timer = duration;
+    }
+
+    clearGravityWell() {
+      this.gravityWell.active = false;
+      this.gravityWell.timer = 0;
     }
 
     spawnBullet(x, y, vx, vy, radius, color, damage = 1, behavior = null) {
@@ -512,6 +828,8 @@
       pool.param1[slot] = behavior?.param1 ?? 0;
       pool.param2[slot] = behavior?.param2 ?? 0;
       pool.param3[slot] = behavior?.param3 ?? 0;
+      pool.originX[slot] = behavior?.originX ?? x;
+      pool.originY[slot] = behavior?.originY ?? y;
       pool.angleOffset[slot] = behavior?.angleOffset ?? 0;
       pool.spinSpeed[slot] = behavior?.spinSpeed ?? 0;
       pool.active[slot] = 1;
@@ -524,11 +842,18 @@
     }
 
     update(deltaTime, player, enemyManager, bossController) {
-      const threshold = this.difficulty === "lunatic" ? 360 : this.difficulty === "hard" ? 300 : 420;
+      const threshold = this.difficulty === "lunatic" ? 1250 : this.difficulty === "hard" ? 1350 : 1600;
       if (this.enemyPool.count > threshold) {
         this.globalSpeedScale = 0.95;
       } else {
         this.globalSpeedScale = 1;
+      }
+
+      if (this.gravityWell.active) {
+        this.gravityWell.timer -= deltaTime;
+        if (this.gravityWell.timer <= 0) {
+          this.clearGravityWell();
+        }
       }
 
       this.updateEnemyBullets(deltaTime, player);
@@ -554,6 +879,7 @@
           continue;
         }
 
+        this.applyGravityWell(slot, deltaTime);
         pool.x[slot] += pool.vx[slot] * deltaTime * this.globalSpeedScale;
         pool.y[slot] += pool.vy[slot] * deltaTime * this.globalSpeedScale;
         pool.angleOffset[slot] += pool.spinSpeed[slot] * deltaTime;
@@ -643,6 +969,70 @@
         return false;
       }
 
+      if (behaviorType === BulletBehavior.DELAY_STASIS) {
+        if (pool.behaviorState[slot] === 0) {
+          const frameDrag = Math.pow(0.88, deltaTime * 60);
+          pool.vx[slot] *= frameDrag;
+          pool.vy[slot] *= frameDrag;
+
+          if (pool.lifeTimer[slot] >= pool.param0[slot]) {
+            pool.vx[slot] = 0;
+            pool.vy[slot] = 0;
+            pool.behaviorState[slot] = 1;
+            pool.lifeTimer[slot] = 0;
+          }
+          return false;
+        }
+
+        if (pool.behaviorState[slot] === 1 && pool.lifeTimer[slot] >= pool.param1[slot]) {
+          const angle = Math.atan2(player.y - pool.y[slot], player.x - pool.x[slot]);
+          const speed = pool.param2[slot];
+          pool.vx[slot] = Math.cos(angle) * speed;
+          pool.vy[slot] = Math.sin(angle) * speed;
+          pool.behaviorState[slot] = 2;
+          pool.lifeTimer[slot] = 0;
+        }
+        return false;
+      }
+
+      if (behaviorType === BulletBehavior.REFLECT_BOUND) {
+        const bounceRadius = Math.max(1, pool.radius[slot]);
+        if (pool.x[slot] <= bounceRadius && pool.vx[slot] < 0) {
+          pool.x[slot] = bounceRadius;
+          pool.vx[slot] = -pool.vx[slot];
+        } else if (pool.x[slot] >= GAME_WIDTH - bounceRadius && pool.vx[slot] > 0) {
+          pool.x[slot] = GAME_WIDTH - bounceRadius;
+          pool.vx[slot] = -pool.vx[slot];
+        }
+
+        if (pool.y[slot] >= GAME_HEIGHT - bounceRadius && pool.vy[slot] > 0) {
+          pool.y[slot] = GAME_HEIGHT - bounceRadius;
+          pool.vy[slot] = -pool.vy[slot] * 0.96;
+        }
+        return false;
+      }
+
+      if (behaviorType === BulletBehavior.ORBITAL_SATELLITE) {
+        const targetRadius = pool.param1[slot];
+        const expandRate = pool.param2[slot];
+        const orbitRadius = Math.min(targetRadius, pool.param0[slot] + pool.lifeTimer[slot] * expandRate);
+        const angle = pool.angleOffset[slot] + pool.lifeTimer[slot] * pool.spinSpeed[slot];
+        pool.x[slot] = pool.originX[slot] + Math.cos(angle) * orbitRadius;
+        pool.y[slot] = pool.originY[slot] + Math.sin(angle) * orbitRadius;
+        pool.vx[slot] = 0;
+        pool.vy[slot] = 0;
+        return false;
+      }
+
+      if (behaviorType === BulletBehavior.BUBBLE_SINE) {
+        const age = pool.lifeTimer[slot];
+        const wave = Math.sin(age * pool.param1[slot] + pool.param3[slot]);
+        const drift = Math.cos(age * pool.param1[slot] * 0.74 + pool.param3[slot] * 1.7);
+        pool.vx[slot] += wave * pool.param0[slot] * deltaTime;
+        pool.vy[slot] += drift * pool.param2[slot] * deltaTime;
+        return false;
+      }
+
       if (behaviorType === BulletBehavior.PETAL_RAIN) {
         pool.vy[slot] += pool.param0[slot] * deltaTime;
         pool.vx[slot] += Math.sin(pool.lifeTimer[slot] * pool.param1[slot] + slot * 0.31) * pool.param2[slot] * deltaTime;
@@ -650,6 +1040,28 @@
       }
 
       return false;
+    }
+
+    applyGravityWell(slot, deltaTime) {
+      if (!this.gravityWell.active) {
+        return;
+      }
+
+      const pool = this.enemyPool;
+      const dx = this.gravityWell.x - pool.x[slot];
+      const dy = this.gravityWell.y - pool.y[slot];
+      const distanceSq = dx * dx + dy * dy;
+      const radiusSq = this.gravityWell.radius * this.gravityWell.radius;
+
+      if (distanceSq <= 4 || distanceSq > radiusSq) {
+        return;
+      }
+
+      const distance = Math.sqrt(distanceSq);
+      const pull = this.gravityWell.strength * (1 - distance / this.gravityWell.radius);
+      const tangent = pull * 0.54;
+      pool.vx[slot] += (dx / distance) * pull * deltaTime + (-dy / distance) * tangent * deltaTime;
+      pool.vy[slot] += (dy / distance) * pull * deltaTime + (dx / distance) * tangent * deltaTime;
     }
 
     explodeSplitBurst(slot) {
@@ -828,6 +1240,8 @@
       pool.param1[slot] = 0;
       pool.param2[slot] = 0;
       pool.param3[slot] = 0;
+      pool.originX[slot] = 0;
+      pool.originY[slot] = 0;
       pool.angleOffset[slot] = 0;
       pool.spinSpeed[slot] = 0;
       pool.freeIndices[pool.freeTop] = slot;
@@ -885,29 +1299,83 @@
       }
 
       if (color === "AURORA_BUBBLE") {
+        const frameIndex = Math.floor(this.enemyPool.lifeTimer[slot] * 7) % this.spriteCache.auroraBubbleFrames.length;
         return {
-          sprite: this.spriteCache.bubbleOrb.canvas,
-          size: (radius + 18) * 3.0,
+          sprite: this.spriteCache.auroraBubbleFrames[frameIndex].canvas,
+          size: (radius + 18) * 2.8,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "BARRIER_CYAN") {
+        return {
+          sprite: this.spriteCache.barrierCyan.canvas,
+          size: (radius + 12) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "BARRIER_GOLD") {
+        return {
+          sprite: this.spriteCache.barrierGold.canvas,
+          size: (radius + 12) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "MEDIUM_GREEN" || color === "#00FF66" || color === "#8ec4ff") {
+        return {
+          sprite: this.spriteCache.mediumGreen.canvas,
+          size: (radius + 8) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "MEDIUM_RED" || color === "#FF1E2F" || color === "#ffc892" || color === "#efb0ff") {
+        return {
+          sprite: this.spriteCache.mediumRed.canvas,
+          size: (radius + 8) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "RICE_PURPLE") {
+        return {
+          sprite: this.spriteCache.ricePurple.canvas,
+          size: (radius + 10) * visualScale,
           composite: "lighter",
         };
       }
 
       if (behaviorType === BulletBehavior.RETARGET_ONCE || color === "ROSE_GILDED") {
         return {
-          sprite: this.spriteCache.bubbleOrb.canvas,
-          size: (radius + 10) * 1.7,
+          sprite: this.enemyPool.behaviorState[slot] === 1
+            ? this.spriteCache.mediumRed.canvas
+            : this.spriteCache.mediumGreen.canvas,
+          size: (radius + 10) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (behaviorType === BulletBehavior.DELAY_STASIS) {
+        return {
+          sprite: this.enemyPool.behaviorState[slot] === 1
+            ? this.spriteCache.barrierGold.canvas
+            : this.spriteCache.mediumGreen.canvas,
+          size: (radius + 10) * visualScale,
           composite: "lighter",
         };
       }
 
       if (
+        color === "YINYANG_PETAL" ||
         color === "PETAL_DARK" ||
         color === Palette.darkRed ||
         color === Palette.velvet ||
         color === Palette.brightRed
       ) {
         return {
-          sprite: this.spriteCache.darkPetal.canvas,
+          sprite: this.spriteCache.yinYangPetal.canvas,
           size: (radius + 12) * visualScale,
         };
       }
