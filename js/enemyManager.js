@@ -258,8 +258,8 @@
           0,
           180 * pool.maxHealth[slot],
           90,
-          5,
-          "#ffc892"
+          6,
+          "MEDIUM_BLUE"
         );
       }
     }
@@ -397,6 +397,11 @@
         const y = pool.y[slot];
         const type = pool.type[slot];
 
+        if ((window.currentStage || 1) === 1 && type === TYPE_A) {
+          this.renderPixelDuck(ctx, x, y, pool.driftTimer[slot]);
+          continue;
+        }
+
         if (sprite) {
           const frame = type === TYPE_A ? ENEMY_FRAMES.A : type === TYPE_B ? ENEMY_FRAMES.B : ENEMY_FRAMES.C;
           const renderWidth = type === TYPE_C ? 42 : 38;
@@ -445,6 +450,40 @@
           ctx.stroke();
         }
       }
+    }
+
+    renderPixelDuck(ctx, x, y, timer) {
+      const bob = Math.sin(timer * 5.4) * 1.5;
+      const px = Math.round(x);
+      const py = Math.round(y + bob);
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.imageSmoothingEnabled = false;
+      ctx.shadowColor = "rgba(255, 230, 96, 0.32)";
+      ctx.shadowBlur = 7;
+
+      ctx.fillStyle = "#f7c82f";
+      ctx.fillRect(-11, -7, 19, 14);
+      ctx.fillRect(-6, -13, 13, 10);
+      ctx.fillRect(4, -11, 8, 7);
+
+      ctx.fillStyle = "#ffe86b";
+      ctx.fillRect(-8, -10, 10, 5);
+      ctx.fillRect(-8, -4, 13, 6);
+
+      ctx.fillStyle = "#ff8a2a";
+      ctx.fillRect(10, -7, 8, 3);
+      ctx.fillRect(11, -4, 6, 2);
+      ctx.fillRect(-7, 7, 5, 3);
+      ctx.fillRect(3, 7, 5, 3);
+
+      ctx.fillStyle = "#222222";
+      ctx.fillRect(5, -10, 2, 2);
+
+      ctx.fillStyle = "rgba(255,255,255,0.70)";
+      ctx.fillRect(-5, -11, 3, 2);
+      ctx.restore();
     }
   }
 

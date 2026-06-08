@@ -22,19 +22,29 @@
     moon: "#FFFDD0",
   };
 
-  const BOSS_FRAMES = {
-    idle: [
-      { x: 1272, y: 324, w: 204, h: 308 },
-      { x: 1524, y: 324, w: 204, h: 308 },
-      { x: 1776, y: 324, w: 204, h: 308 },
-      { x: 2028, y: 324, w: 204, h: 308 },
-    ],
-    side: [
-      { x: 1276, y: 716, w: 210, h: 320 },
-      { x: 1528, y: 716, w: 210, h: 320 },
-      { x: 1780, y: 716, w: 210, h: 320 },
-      { x: 2032, y: 716, w: 210, h: 320 },
-    ],
+  const BossAnimationState = {
+    IDLE: "BOSS_IDLE",
+    ATTACK: "BOSS_ATTACK",
+    MOVE: "BOSS_MOVE",
+  };
+
+  const BOSS_SPRITE_CONFIGS = {
+    1: {
+      bossKey: "bossStage1",
+      renderHeight: 64,
+      states: {
+        idle: { x: 1260, y: 310, w: 1010, h: 330, rows: 1, cols: 4 },
+        side: { x: 1260, y: 704, w: 1010, h: 344, rows: 1, cols: 4 },
+      },
+    },
+    2: {
+      bossKey: "bossStage2",
+      renderHeight: 64,
+      states: {
+        idle: { x: 1260, y: 310, w: 1010, h: 330, rows: 1, cols: 4 },
+        side: { x: 1260, y: 704, w: 1010, h: 344, rows: 1, cols: 4 },
+      },
+    },
   };
 
   const PHASE_TIME_LIMIT = 180;
@@ -61,17 +71,18 @@
       phaseName: "Delay Stasis",
       baseHealth: Math.floor(BOSS_MAX_HEALTH * 0.82),
       totalTimeLimit: PHASE_TIME_LIMIT * 2,
-      resetHpOnPhase: true,
       phases: [
         {
           name: "03 Delay Stasis",
           spellIds: ["DELAY_STASIS"],
           duration: PHASE_TIME_LIMIT,
+          threshold: 0.5,
         },
         {
           name: "05 Wave Ring",
           spellIds: ["WAVE_RING"],
           duration: PHASE_TIME_LIMIT,
+          threshold: 0,
         },
       ],
       barColors: [Palette.moon, "#00FF66", Palette.gold, Palette.velvet],
@@ -104,7 +115,7 @@
         },
         {
           name: "04 Laser Grid",
-          spellIds: ["LASER_GRID"],
+          spellIds: ["LASER_GRID", "SINE_PETAL_DRIFT"],
           duration: PHASE_TIME_LIMIT,
           threshold: 1 / 3,
         },
@@ -164,6 +175,18 @@
       this.itemManager = itemManager;
     }
 
+    configureSpriteGrid(stage) {
+      const spriteConfig = BOSS_SPRITE_CONFIGS[stage] || BOSS_SPRITE_CONFIGS[1];
+      this.bossSpriteKey = spriteConfig.bossKey;
+      this.bossSpriteConfig = spriteConfig;
+      this.bossRenderHeight = spriteConfig.renderHeight;
+      const idleState = spriteConfig.states.idle;
+      this.rows = idleState.rows;
+      this.cols = idleState.cols;
+      this.spriteFrame = 0;
+      this.frameCropCache = {};
+    }
+
     reset() {
       this.active = false;
       this.inBattle = false;
@@ -199,6 +222,13 @@
       this.spriteState = "idle";
       this.facingDirection = 1;
       this.prevX = this.x;
+      this.animationState = BossAnimationState.IDLE;
+      this.bossSpriteKey = "bossStage1";
+      this.bossSpriteConfig = BOSS_SPRITE_CONFIGS[1];
+      this.bossRenderHeight = this.bossSpriteConfig.renderHeight;
+      this.rows = this.bossSpriteConfig.states.idle.rows;
+      this.cols = this.bossSpriteConfig.states.idle.cols;
+      this.frameCropCache = {};
       this.timerA = 0;
       this.timerB = 0;
       this.timerC = 0;
@@ -222,6 +252,7 @@
       this.phase = 1;
       this.phaseName = this.roleScript.phases[0]?.name || this.roleScript.phaseName || this.roleScript.name;
       this.phaseBarColors = this.roleScript.barColors || this.phaseBarColors;
+      this.configureSpriteGrid(currentStage);
       this.targetX = this.pickTargetX();
       this.targetY = stagePhase === "MID_BOSS" ? 145 : BOSS_ENTRY_Y;
       this.x = this.targetX;
@@ -231,6 +262,51 @@
       this.active = true;
       this.invulnerable = false;
       global.HealthSystem.resetEntity(this, Math.floor(this.roleScript.baseHealth * this.difficultyHpMultiplier));
+    }
+
+    activatePractice(script, currentStage = 1, phase = 1) {
+      this.activateEntry(script, currentStage, "BOSS");
+      const maxPhase = Math.max(1, this.roleScript.phases.length);
+      const targetPhase = Math.max(1, Math.min(maxPhase, Math.floor(phase) || 1));
+
+      this.x = this.pickTargetX();
+      this.y = BOSS_ENTRY_Y;
+      this.targetX = this.x;
+      this.targetY = BOSS_ENTRY_Y;
+      this.moveEndX = this.x;
+      this.moveStartX = this.x;
+      this.prevX = this.x;
+      this.active = true;
+      this.inBattle = true;
+      this.defeated = false;
+      this.timedOut = false;
+      this.wasKilled = false;
+      this.invulnerable = false;
+      this.beginPhase(targetPhase, false);
+      this.totalBattleTimer = this.getPracticeElapsedBeforePhase(targetPhase);
+
+      const startRatio = this.getPracticeHealthRatio(targetPhase);
+      this.health = Math.max(1, Math.ceil(this.maxHealth * startRatio));
+      this.phaseRewardMask = targetPhase > 1 ? (1 << (targetPhase - 1)) - 1 : 0;
+      this.bulletManager.clearEnemyBullets();
+      this.bulletManager.clearGravityWell();
+    }
+
+    getPracticeElapsedBeforePhase(phase) {
+      let elapsed = 0;
+      for (let i = 0; i < phase - 1; i += 1) {
+        elapsed += this.roleScript.phases[i]?.duration || PHASE_TIME_LIMIT;
+      }
+      return elapsed;
+    }
+
+    getPracticeHealthRatio(phase) {
+      if (phase <= 1) {
+        return 1;
+      }
+
+      const previousPhase = this.roleScript.phases[phase - 2];
+      return Math.max(0.02, previousPhase?.threshold ?? 1);
     }
 
     pickTargetX() {
@@ -301,6 +377,7 @@
       this.moveClock += deltaTime;
       this.updateMovementState(deltaTime);
       this.updateLaserHazards(deltaTime, player);
+      this.updateBossAnimationState();
 
       const spells = phaseScript?.spellIds || [];
       for (let i = 0; i < spells.length; i += 1) {
@@ -333,6 +410,8 @@
         this.updateClusterSplit(deltaTime);
       } else if (spellId === "LASER_GRID") {
         this.updateLaserGrid(deltaTime);
+      } else if (spellId === "SINE_PETAL_DRIFT") {
+        this.updateSinePetalDrift(deltaTime);
       } else if (spellId === "FINALE_BRANCHES") {
         this.updateFinaleBranches(deltaTime, player);
       }
@@ -346,7 +425,7 @@
 
       const hard = this.isHard();
       const lunatic = this.isLunatic();
-      this.timerA += lunatic ? 0.42 : hard ? 0.54 : 0.68;
+      this.timerA += lunatic ? 0.39 : hard ? 0.5 : 0.63;
       const aim = this.emitter.getAngleToTarget(this.x, this.y, player.x, player.y);
       const parity = Math.floor(this.phaseTimer * 2.2) % 2;
       const ways = parity === 0 ? (lunatic ? 8 : hard ? 6 : 4) : (lunatic ? 9 : hard ? 7 : 5);
@@ -360,7 +439,7 @@
       const hard = this.isHard();
       const lunatic = this.isLunatic();
       const flow = Math.max(0.25, audioAnalysis.musicFlow || 0.4);
-      const step = (lunatic ? 0.038 : hard ? 0.048 : 0.058) * (1.08 - flow * 0.14);
+      const step = (lunatic ? 0.035 : hard ? 0.044 : 0.054) * (1.08 - flow * 0.14);
 
       while (this.timerB >= step) {
         this.timerB -= step;
@@ -373,14 +452,16 @@
 
     updateDelayStasis(deltaTime) {
       this.timerA -= deltaTime;
+      this.timerC -= deltaTime;
       if (this.timerA > 0) {
+        this.updateDelaySunflowerRings();
         return;
       }
 
       const hard = this.isHard();
       const lunatic = this.isLunatic();
-      this.timerA += lunatic ? 0.82 : hard ? 1.02 : 1.18;
-      const count = lunatic ? 22 : hard ? 18 : 14;
+      this.timerA += lunatic ? 0.76 : hard ? 0.95 : 1.1;
+      const count = lunatic ? 24 : hard ? 20 : 15;
       const speed = lunatic ? 168 : hard ? 150 : 134;
       const startAngle = this.phaseTimer * (lunatic ? 41 : 31);
 
@@ -403,6 +484,28 @@
           }
         );
       }
+
+      this.updateDelaySunflowerRings();
+    }
+
+    updateDelaySunflowerRings() {
+      if (this.roleScript !== bossRoles.boss1 || this.phase !== 1 || this.timerC > 0) {
+        return;
+      }
+
+      this.timerC += this.isLunatic() ? 3.95 : this.isHard() ? 4.65 : 5.35;
+      const baseCount = this.isLunatic() ? 20 : this.isHard() ? 17 : 15;
+      const start = this.phaseTimer * 18;
+      for (let wave = 0; wave < 2; wave += 1) {
+        const count = baseCount + wave * 4;
+        const speed = 34 + wave * 18;
+        const offset = start + wave * 360 / Math.max(1, count * 2);
+        for (let i = 0; i < count; i += 1) {
+          const angle = offset + (360 / count) * i;
+          const velocity = this.emitter.angleToVelocity(angle, speed);
+          this.bulletManager.spawnBullet(this.x, this.y + 8, velocity.vx, velocity.vy, 7, "GOLD_ORB");
+        }
+      }
     }
 
     updateWaveRing(deltaTime) {
@@ -413,8 +516,8 @@
 
       const hard = this.isHard();
       const lunatic = this.isLunatic();
-      this.timerB += lunatic ? 0.36 : hard ? 0.48 : 0.62;
-      const ringCount = lunatic ? 38 : hard ? 32 : 26;
+      this.timerB += lunatic ? 0.34 : hard ? 0.45 : 0.58;
+      const ringCount = lunatic ? 40 : hard ? 34 : 28;
       const start = this.phaseTimer * (lunatic ? 74 : 55) + Math.sin(this.phaseTimer * 2.4) * 18;
       const radiusWave = 5 + Math.sin(this.phaseTimer * 3.1) * 2;
 
@@ -434,14 +537,14 @@
 
       const hard = this.isHard();
       const lunatic = this.isLunatic();
-      this.timerA += lunatic ? 0.12 : hard ? 0.16 : 0.21;
-      const lanes = lunatic ? 4 : hard ? 3 : 2;
+      this.timerA += lunatic ? 0.18 : hard ? 0.24 : 0.31;
+      const lanes = lunatic ? 3 : hard ? 2 : 1;
       const base = 58 + Math.sin(this.phaseTimer * 3.8) * 18;
 
       for (let i = 0; i < lanes; i += 1) {
         const offset = (i - (lanes - 1) * 0.5) * 16;
         const angle = base + offset + (i % 2 === 0 ? 0 : 12);
-        const velocity = this.emitter.angleToVelocity(angle, lunatic ? 244 : hard ? 220 : 192);
+        const velocity = this.emitter.angleToVelocity(angle, lunatic ? 171 : hard ? 154 : 134);
         this.bulletManager.spawnBullet(
           this.x + offset,
           this.y + 18,
@@ -459,12 +562,14 @@
 
     updateOrbitalSatellite(deltaTime) {
       this.timerB -= deltaTime;
+      this.timerD -= deltaTime;
       if (this.timerB > 0) {
+        this.updateSatelliteLeafAimed();
         return;
       }
 
-      this.timerB += this.isLunatic() ? 3.7 : this.isHard() ? 4.4 : 5.2;
-      const count = this.isLunatic() ? 18 : this.isHard() ? 15 : 12;
+      this.timerB += this.isLunatic() ? 3.45 : this.isHard() ? 4.1 : 4.85;
+      const count = this.isLunatic() ? 19 : this.isHard() ? 16 : 13;
       const baseRadius = 42;
       const maxRadius = Math.hypot(GAME_WIDTH, GAME_HEIGHT) * 0.72;
       const expandRate = this.isLunatic() ? 122 : this.isHard() ? 98 : 78;
@@ -491,6 +596,28 @@
           }
         );
       }
+
+      this.updateSatelliteLeafAimed();
+    }
+
+    updateSatelliteLeafAimed() {
+      if (this.roleScript !== bossRoles.midBoss2 || !this.lastPlayer || this.timerD > 0) {
+        return;
+      }
+
+      this.timerD += this.isLunatic() ? 0.96 : this.isHard() ? 1.16 : 1.42;
+      const aim = this.emitter.getAngleToTarget(this.x, this.y, this.lastPlayer.x, this.lastPlayer.y);
+      const leafWays = this.isLunatic() ? 4 : 3;
+      this.emitter.fireNWay(
+        this.x,
+        this.y + 12,
+        leafWays,
+        this.isLunatic() ? 24 : 18,
+        this.isLunatic() ? 238 : this.isHard() ? 214 : 188,
+        aim,
+        5,
+        "LEAF_VERDANT"
+      );
     }
 
     updateClusterSplit(deltaTime) {
@@ -499,7 +626,7 @@
         return;
       }
 
-      this.timerA += this.isLunatic() ? 0.72 : this.isHard() ? 0.92 : 1.16;
+      this.timerA += this.isLunatic() ? 0.66 : this.isHard() ? 0.84 : 1.06;
       const spreads = this.isLunatic() ? [-42, 0, 42] : this.isHard() ? [-28, 28] : [0];
       for (let i = 0; i < spreads.length; i += 1) {
         const velocity = this.emitter.angleToVelocity(90 + spreads[i] * 0.28, 58 + i * 8);
@@ -514,7 +641,7 @@
           {
             type: BulletBehavior.SPLIT_BURST,
             param0: 1.03,
-            param1: 16,
+            param1: 18,
             param2: this.isLunatic() ? 188 : 164,
           }
         );
@@ -527,15 +654,49 @@
         return;
       }
 
-      this.timerA += this.isLunatic() ? 3.2 : this.isHard() ? 3.8 : 4.5;
+      this.timerA += this.isLunatic() ? 3.05 : this.isHard() ? 3.6 : 4.25;
       this.laserGrid = {
         timer: 3.2,
         warn: 1.2,
         fire: 2,
         baseX: this.x,
         sweep: Math.random() < 0.5 ? -1 : 1,
-        offsets: [-126, -44, 44, 126],
+        offsets: [-162, -54, 54, 162],
       };
+    }
+
+    updateSinePetalDrift(deltaTime) {
+      this.timerD -= deltaTime;
+      if (this.timerD > 0) {
+        return;
+      }
+
+      this.timerD += this.isLunatic() ? 1.14 : this.isHard() ? 1.42 : 1.72;
+      const lanes = this.isLunatic() ? 9 : this.isHard() ? 8 : 6;
+      const left = this.x - 150;
+      const span = 300;
+      for (let i = 0; i < lanes; i += 1) {
+        const t = lanes <= 1 ? 0.5 : i / (lanes - 1);
+        const originX = left + span * t + Math.sin(this.phaseTimer * 2 + i) * 10;
+        const speedY = 70 + i * 4;
+        this.bulletManager.spawnBullet(
+          originX,
+          this.y + 26,
+          (t - 0.5) * 22,
+          speedY,
+          6,
+          "PETAL_WHITE",
+          1,
+          {
+            type: BulletBehavior.PETAL_RAIN,
+            param0: 10,
+            param1: 4.2 + i * 0.18,
+            param2: 38,
+            angleOffset: Math.random() * Math.PI * 2,
+            spinSpeed: 0.9,
+          }
+        );
+      }
     }
 
     updateFinaleBranches(deltaTime, player) {
@@ -759,8 +920,9 @@
       this.spriteTimer += deltaTime;
       if (this.spriteTimer >= 0.14) {
         this.spriteTimer = 0;
-        const activeFrames = this.spriteState === "side" ? BOSS_FRAMES.side : BOSS_FRAMES.idle;
-        this.spriteFrame = (this.spriteFrame + 1) % activeFrames.length;
+        const stateConfig = this.getBossStateConfig();
+        const frameCount = Math.max(1, stateConfig.rows * stateConfig.cols);
+        this.spriteFrame = (this.spriteFrame + 1) % frameCount;
       }
     }
 
@@ -775,15 +937,24 @@
       this.prevX = this.x;
     }
 
+    updateBossAnimationState() {
+      if (this.moveState === "moving") {
+        this.animationState = BossAnimationState.MOVE;
+        return;
+      }
+
+      const phaseScript = this.getPhaseScript();
+      const activeSpell = phaseScript?.spellIds?.[0] || "";
+      const attackPulse = this.phaseTimer % (activeSpell === "DELAY_STASIS" ? 1.2 : 0.9);
+      this.animationState = attackPulse < 0.36 ? BossAnimationState.ATTACK : BossAnimationState.IDLE;
+    }
+
     beginPhase(phase, playFx = true) {
       this.phase = phase;
       this.phaseTimer = 0;
       this.phaseRewardMask = 0;
       this.invulnerable = false;
       this.phaseName = this.getPhaseScript()?.name || this.roleScript.phaseName;
-      if (this.roleScript.resetHpOnPhase && phase > 1) {
-        global.HealthSystem.resetEntity(this, Math.floor(this.roleScript.baseHealth * this.difficultyHpMultiplier));
-      }
       this.timerA = 0.2;
       this.timerB = 0.15;
       this.timerC = 0.3;
@@ -812,6 +983,14 @@
     }
 
     updatePhaseByHealth() {
+      if (this.roleScript === bossRoles.boss1) {
+        const ratio = global.HealthSystem.getRatio(this);
+        if (this.phase === 1 && ratio <= 0.5) {
+          this.beginPhase(2);
+        }
+        return;
+      }
+
       if (this.roleScript !== bossRoles.argenti) {
         return;
       }
@@ -944,13 +1123,6 @@
 
       const previousRatio = global.HealthSystem.getRatio(this);
       if (global.HealthSystem.damageEntity(this, damage)) {
-        if (this.roleScript.resetHpOnPhase && this.phase < this.roleScript.phases.length) {
-          this.spawnPhasePressureReward();
-          this.beginPhase(this.phase + 1);
-          player.addScore(2500);
-          return true;
-        }
-
         this.defeated = true;
         this.wasKilled = true;
         this.active = false;
@@ -979,20 +1151,9 @@
         return;
       }
 
-      const sprite = this.assetLoader.get("boss");
+      const sprite = this.assetLoader.get(this.bossSpriteKey) || this.assetLoader.get("boss");
       if (sprite) {
-        ctx.save();
-        const frames = this.spriteState === "side" ? BOSS_FRAMES.side : BOSS_FRAMES.idle;
-        const frame = frames[this.spriteFrame % frames.length];
-        ctx.imageSmoothingEnabled = false;
-        if (this.spriteState === "side" && this.facingDirection > 0) {
-          ctx.translate(this.x, 0);
-          ctx.scale(-1, 1);
-          ctx.drawImage(sprite, frame.x, frame.y, frame.w, frame.h, -24, this.y - 32, 48, 64);
-        } else {
-          ctx.drawImage(sprite, frame.x, frame.y, frame.w, frame.h, this.x - 24, this.y - 32, 48, 64);
-        }
-        ctx.restore();
+        this.drawBoss(ctx, sprite);
         return;
       }
 
@@ -1011,6 +1172,125 @@
       ctx.arc(this.x, this.y, 36, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
+    }
+
+    drawBoss(ctx, image) {
+      const stateConfig = this.getBossStateConfig();
+      const rows = Math.max(1, stateConfig.rows);
+      const cols = Math.max(1, stateConfig.cols);
+      const currentFrame = Math.floor(this.spriteFrame) % Math.max(1, rows * cols);
+      const sourceX = stateConfig.x || 0;
+      const sourceY = stateConfig.y || 0;
+      const sourceWidth = stateConfig.w || image.width;
+      const sourceHeight = stateConfig.h || image.height;
+      const frameWidth = sourceWidth / cols;
+      const frameHeight = sourceHeight / rows;
+      let sx = sourceX + (currentFrame % cols) * frameWidth;
+      let sy = sourceY + Math.floor(currentFrame / cols) * frameHeight;
+      const frame = this.getCroppedBossFrame(image, sx, sy, frameWidth, frameHeight, currentFrame, stateConfig);
+      const renderHeight = this.animationState === BossAnimationState.ATTACK
+        ? this.bossRenderHeight * 1.08
+        : this.bossRenderHeight;
+      const scale = renderHeight / Math.max(1, frame.h);
+      const drawWidth = frame.w * scale;
+      const drawHeight = frame.h * scale;
+
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.imageSmoothingEnabled = false;
+      ctx.shadowColor = this.animationState === BossAnimationState.ATTACK
+        ? "rgba(255, 215, 0, 0.45)"
+        : "rgba(0, 255, 255, 0.24)";
+      ctx.shadowBlur = this.animationState === BossAnimationState.ATTACK ? 16 : 8;
+
+      if (this.animationState === BossAnimationState.MOVE && this.facingDirection > 0) {
+        ctx.scale(-1, 1);
+      }
+
+      ctx.drawImage(
+        image,
+        frame.x,
+        frame.y,
+        frame.w,
+        frame.h,
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight
+      );
+      ctx.restore();
+    }
+
+    getBossStateConfig() {
+      const stateName = this.animationState === BossAnimationState.MOVE || this.spriteState === "side"
+        ? "side"
+        : "idle";
+      const states = this.bossSpriteConfig?.states || BOSS_SPRITE_CONFIGS[1].states;
+      const stateConfig = states[stateName] || states.idle;
+      this.rows = stateConfig.rows;
+      this.cols = stateConfig.cols;
+      return stateConfig;
+    }
+
+    getCroppedBossFrame(image, sx, sy, frameWidth, frameHeight, currentFrame, stateConfig) {
+      const cacheKey = `${this.bossSpriteKey}:${stateConfig.x}:${stateConfig.y}:${stateConfig.rows}:${stateConfig.cols}:${currentFrame}`;
+      if (this.frameCropCache[cacheKey]) {
+        return this.frameCropCache[cacheKey];
+      }
+
+      const fallback = {
+        x: sx,
+        y: sy,
+        w: frameWidth,
+        h: frameHeight,
+      };
+
+      const sourceCtx = image.getContext ? image.getContext("2d") : null;
+      if (!sourceCtx) {
+        this.frameCropCache[cacheKey] = fallback;
+        return fallback;
+      }
+
+      const clampedX = Math.max(0, Math.floor(sx));
+      const clampedY = Math.max(0, Math.floor(sy));
+      const clampedW = Math.max(1, Math.min(image.width - clampedX, Math.ceil(frameWidth)));
+      const clampedH = Math.max(1, Math.min(image.height - clampedY, Math.ceil(frameHeight)));
+      const imageData = sourceCtx.getImageData(clampedX, clampedY, clampedW, clampedH);
+      const data = imageData.data;
+      let minX = clampedW;
+      let minY = clampedH;
+      let maxX = -1;
+      let maxY = -1;
+
+      for (let y = 0; y < clampedH; y += 1) {
+        for (let x = 0; x < clampedW; x += 1) {
+          const alpha = data[(y * clampedW + x) * 4 + 3];
+          if (alpha <= 20) {
+            continue;
+          }
+
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
+
+      if (maxX < minX || maxY < minY) {
+        this.frameCropCache[cacheKey] = fallback;
+        return fallback;
+      }
+
+      const padding = 2;
+      const frame = {
+        x: clampedX + Math.max(0, minX - padding),
+        y: clampedY + Math.max(0, minY - padding),
+        w: Math.min(clampedW - Math.max(0, minX - padding), maxX - minX + 1 + padding * 2),
+        h: Math.min(clampedH - Math.max(0, minY - padding), maxY - minY + 1 + padding * 2),
+      };
+
+      this.frameCropCache[cacheKey] = frame;
+      return frame;
     }
 
     renderLaserHazards(ctx) {
@@ -1104,7 +1384,7 @@
       ctx.fillRect(x, y, width * ratio, height);
 
       ctx.strokeStyle = "rgba(255, 230, 210, 0.72)";
-      ctx.lineWidth = this.roleScript === bossRoles.argenti ? 1 : 1.5;
+      ctx.lineWidth = 1;
       ctx.strokeRect(x, y, width, height);
 
       ctx.fillStyle = Palette.moon;
@@ -1114,7 +1394,7 @@
       ctx.fillText(`${this.roleScript.name}  ${this.phaseName}`, GAME_WIDTH * 0.5, y - 4);
 
       ctx.fillStyle = "rgba(255,253,208,0.88)";
-      ctx.font = this.roleScript === bossRoles.argenti ? "10px monospace" : "12px monospace";
+      ctx.font = "12px monospace";
       ctx.textAlign = "right";
       ctx.textBaseline = "bottom";
       ctx.fillText(`P${this.phase} ${remainText}`, GAME_WIDTH - 18, 16);

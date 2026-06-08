@@ -9,6 +9,12 @@
       this.easyButton = document.getElementById("easyButton");
       this.hardButton = document.getElementById("hardButton");
       this.lunaticButton = document.getElementById("lunaticButton");
+      this.autoPlayButton = document.getElementById("autoPlayButton");
+      this.practiceToggleButton = document.getElementById("practiceToggleButton");
+      this.practiceMenu = document.getElementById("practiceMenu");
+      this.practiceDifficultyButtons = Array.from(document.querySelectorAll("[data-practice-difficulty]"));
+      this.practiceButtons = Array.from(document.querySelectorAll("[data-practice-stage][data-practice-phase]"));
+      this.selectedPracticeDifficulty = "hard";
       this.pauseButton = document.getElementById("pauseButton");
       this.resumeButton = document.getElementById("resumeButton");
       this.restartButton = document.getElementById("restartButton");
@@ -29,6 +35,30 @@
       this.easyButton.addEventListener("click", () => actions.onSelectDifficulty("easy"));
       this.hardButton.addEventListener("click", () => actions.onSelectDifficulty("hard"));
       this.lunaticButton.addEventListener("click", () => actions.onSelectDifficulty("lunatic"));
+      this.autoPlayButton.addEventListener("click", actions.onAutoPlay);
+      this.practiceToggleButton.addEventListener("click", () => {
+        if (this.practiceToggleButton.disabled) {
+          return;
+        }
+        this.practiceMenu.classList.toggle("is-hidden");
+      });
+      this.practiceDifficultyButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          if (button.disabled) {
+            return;
+          }
+          this.selectedPracticeDifficulty = button.dataset.practiceDifficulty || "hard";
+          this.updatePracticeDifficultyButtons();
+        });
+      });
+      this.practiceButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const stage = Number(button.dataset.practiceStage);
+          const phase = Number(button.dataset.practicePhase);
+          actions.onPractice(stage, phase, this.selectedPracticeDifficulty);
+        });
+      });
+      this.updatePracticeDifficultyButtons();
       this.pauseButton.addEventListener("click", actions.onPauseMenu);
       this.resumeButton.addEventListener("click", actions.onResume);
       this.restartButton.addEventListener("click", actions.onRestartConfirmed);
@@ -43,10 +73,19 @@
         ? "Assets ready. Choose a difficulty to start."
         : `Loading assets ${loadedCount}/${totalCount} ...`;
 
-      [this.easyButton, this.hardButton, this.lunaticButton].forEach((button) => {
+      [
+        this.easyButton,
+        this.hardButton,
+        this.lunaticButton,
+        this.autoPlayButton,
+        this.practiceToggleButton,
+        ...this.practiceDifficultyButtons,
+        ...this.practiceButtons,
+      ].forEach((button) => {
         button.disabled = !done;
         button.classList.toggle("is-disabled", !done);
       });
+      this.updatePracticeDifficultyButtons();
     }
 
     showStartMenu() {
@@ -54,6 +93,7 @@
       this.hide(this.pauseMenu);
       this.hide(this.gameOverMenu);
       this.hide(this.scoreBoard);
+      this.practiceMenu.classList.add("is-hidden");
     }
 
     showPauseMenu() {
@@ -96,6 +136,14 @@
 
     hide(element) {
       element.classList.add("is-hidden");
+    }
+
+    updatePracticeDifficultyButtons() {
+      this.practiceDifficultyButtons.forEach((button) => {
+        const selected = button.dataset.practiceDifficulty === this.selectedPracticeDifficulty;
+        button.classList.toggle("is-selected", selected);
+        button.setAttribute("aria-pressed", selected ? "true" : "false");
+      });
     }
   }
 

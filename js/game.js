@@ -22,9 +22,14 @@
   bossController.setItemManager(itemManager);
   const stageManager = new global.StageManager(enemyManager, bossController, bulletManager, dialogueManager);
   const player = new global.Player(input, bulletManager, hud, bombEffect, assetLoader);
+  window.isAutoPlay = window.isAutoPlay || false;
 
   const gameState = {
     currentDifficulty: null,
+    mode: "normal",
+    practiceStage: null,
+    practicePhase: null,
+    practiceDifficulty: "hard",
     scene: "menu",
     isPaused: false,
     assetsReady: false,
@@ -37,6 +42,8 @@
 
   ui.bind({
     onSelectDifficulty: startGame,
+    onAutoPlay: startAutoPlay,
+    onPractice: startPractice,
     onPauseMenu: openPauseMenu,
     onResume: resumeGame,
     onRestartConfirmed: restartCurrentRun,
@@ -68,7 +75,7 @@
     update(deltaTime);
     render(now);
 
-    if (dialogueManager.active && (input.wasPressed("KeyZ") || input.wasPressed("Space"))) {
+    if (dialogueManager.active && (window.isAutoPlay || input.wasPressed("KeyZ") || input.wasPressed("Space"))) {
       dialogueManager.advance();
     }
 
@@ -89,12 +96,73 @@
     }
 
     gameState.currentDifficulty = difficulty;
+    gameState.mode = "normal";
+    gameState.practiceStage = null;
+    gameState.practicePhase = null;
+    gameState.practiceDifficulty = "hard";
+    window.isAutoPlay = false;
     gameState.scene = "playing";
     gameState.isPaused = false;
     gameState.bossMusicStarted = false;
     ui.hideAllOverlayMenus();
     resetRunState();
     stageManager.beginIntroDialogue();
+  }
+
+  async function startAutoPlay() {
+    if (!gameState.assetsReady) {
+      return;
+    }
+
+    try {
+      await audioManager.resume();
+      await audioManager.playTrack("stage");
+    } catch {
+      // audio permission or codec failure should not block the game start
+    }
+
+    gameState.currentDifficulty = "lunatic";
+    gameState.mode = "auto";
+    gameState.practiceStage = null;
+    gameState.practicePhase = null;
+    gameState.practiceDifficulty = "hard";
+    window.isAutoPlay = true;
+    gameState.scene = "playing";
+    gameState.isPaused = false;
+    gameState.bossMusicStarted = false;
+    ui.hideAllOverlayMenus();
+    resetRunState();
+    stageManager.introDialogueDone = true;
+    stageManager.pauseForDialogue = false;
+    stageManager.enterWavePhase();
+  }
+
+  async function startPractice(stage, phase, difficulty = "hard") {
+    if (!gameState.assetsReady) {
+      return;
+    }
+
+    try {
+      await audioManager.resume();
+      await audioManager.playTrack("boss");
+    } catch {
+      // audio permission or codec failure should not block the practice start
+    }
+
+    const selectedDifficulty = normalizeDifficulty(difficulty);
+    gameState.currentDifficulty = selectedDifficulty;
+    gameState.mode = "practice";
+    gameState.practiceStage = stage;
+    gameState.practicePhase = phase;
+    gameState.practiceDifficulty = selectedDifficulty;
+    window.isAutoPlay = false;
+    gameState.scene = "playing";
+    gameState.isPaused = false;
+    gameState.bossMusicStarted = true;
+    ui.hideAllOverlayMenus();
+    resetRunState();
+    gameState.bossMusicStarted = true;
+    stageManager.startPractice(stage, phase);
   }
 
   function resetRunState() {
@@ -140,6 +208,18 @@
     gameState.scene = "playing";
     gameState.isPaused = false;
     ui.hideAllOverlayMenus();
+
+    if (gameState.mode === "auto") {
+      startAutoPlay();
+      return;
+    }
+
+    if (gameState.mode === "practice" && gameState.practiceStage && gameState.practicePhase) {
+      startPractice(gameState.practiceStage, gameState.practicePhase, gameState.practiceDifficulty);
+      return;
+    }
+
+    window.isAutoPlay = false;
     resetRunState();
     audioManager.playTrack("stage").catch(() => {});
     stageManager.beginIntroDialogue();
@@ -184,6 +264,11 @@
     gameState.scene = "menu";
     gameState.isPaused = false;
     gameState.currentDifficulty = null;
+    gameState.mode = "normal";
+    gameState.practiceStage = null;
+    gameState.practicePhase = null;
+    gameState.practiceDifficulty = "hard";
+    window.isAutoPlay = false;
     bulletManager.clearEnemyBullets();
     itemManager.clearAll();
     enemyManager.clearAll();
@@ -220,6 +305,13 @@
       return "Hard";
     }
     return "Easy";
+  }
+
+  function normalizeDifficulty(difficulty) {
+    if (difficulty === "easy" || difficulty === "hard" || difficulty === "lunatic") {
+      return difficulty;
+    }
+    return "hard";
   }
 
   function getClearBonus() {
@@ -262,7 +354,11 @@
     }
 
     updateBackground(deltaTime);
-    player.update(deltaTime);
+    if (window.isAutoPlay) {
+      player.updateAutoPlay(deltaTime, { bulletManager, bossController, enemyManager });
+    } else {
+      player.update(deltaTime);
+    }
     stageManager.update(deltaTime, player, audioAnalysis);
     bulletManager.update(deltaTime, player, enemyManager, bossController);
     itemManager.update(deltaTime, player);
@@ -313,7 +409,8 @@
   }
 
   function updateBackground(deltaTime) {
-    gameState.backgroundScroll += 80 * deltaTime;
+    const scrollSpeed = 80;
+    gameState.backgroundScroll += scrollSpeed * deltaTime;
     if (gameState.backgroundScroll >= GAME_HEIGHT) {
       gameState.backgroundScroll -= GAME_HEIGHT;
     }
@@ -332,7 +429,7 @@
   function drawBackground() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    const bgImage = assetLoader.get("bgLayer");
+    const bgImage = assetLoader.getStageBackground(stageManager.currentStage);
     if (bgImage) {
       drawScrollingBackground(bgImage);
       return;
@@ -351,9 +448,11 @@
     const drawWidth = GAME_WIDTH;
     const offsetY = gameState.backgroundScroll;
 
-    ctx.drawImage(image, 0, -offsetY, drawWidth, drawHeight);
-    ctx.drawImage(image, 0, drawHeight - offsetY, drawWidth, drawHeight);
+    ctx.drawImage(image, 0, offsetY, drawWidth, drawHeight);
+    ctx.drawImage(image, 0, offsetY - drawHeight, drawWidth, drawHeight);
   }
 
   requestAnimationFrame(gameLoop);
+  window.startPractice = startPractice;
+  window.startAutoPlay = startAutoPlay;
 })(window.XTouhouWeb);

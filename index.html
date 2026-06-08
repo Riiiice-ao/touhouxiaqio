@@ -44,6 +44,20 @@
               <button id="easyButton" class="menu-btn menu-btn-easy is-disabled" type="button" disabled>Easy</button>
               <button id="hardButton" class="menu-btn menu-btn-hard is-disabled" type="button" disabled>Hard</button>
               <button id="lunaticButton" class="menu-btn menu-btn-lunatic is-disabled" type="button" disabled>Lunatic</button>
+              <button id="autoPlayButton" class="menu-btn menu-btn-easy is-disabled" type="button" disabled>Auto Demo</button>
+              <button id="practiceToggleButton" class="menu-btn menu-btn-hard is-disabled" type="button" disabled>Practice</button>
+              <div id="practiceMenu" class="practice-menu is-hidden">
+                <div class="practice-difficulty">
+                  <button class="menu-btn menu-btn-easy practice-choice is-disabled" type="button" data-practice-difficulty="easy" disabled>Easy</button>
+                  <button class="menu-btn menu-btn-hard practice-choice is-selected is-disabled" type="button" data-practice-difficulty="hard" disabled>Hard</button>
+                  <button class="menu-btn menu-btn-lunatic practice-choice is-disabled" type="button" data-practice-difficulty="lunatic" disabled>Lunatic</button>
+                </div>
+                <button class="menu-btn menu-btn-hard is-disabled" type="button" data-practice-stage="1" data-practice-phase="1" disabled>Practice 1-1</button>
+                <button class="menu-btn menu-btn-hard is-disabled" type="button" data-practice-stage="1" data-practice-phase="2" disabled>Practice 1-2</button>
+                <button class="menu-btn menu-btn-lunatic is-disabled" type="button" data-practice-stage="2" data-practice-phase="1" disabled>Practice 2-1</button>
+                <button class="menu-btn menu-btn-lunatic is-disabled" type="button" data-practice-stage="2" data-practice-phase="2" disabled>Practice 2-2</button>
+                <button class="menu-btn menu-btn-lunatic is-disabled" type="button" data-practice-stage="2" data-practice-phase="3" disabled>Practice 2-3</button>
+              </div>
             </div>
           </div>
         </div>

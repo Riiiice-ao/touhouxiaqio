@@ -167,6 +167,34 @@
       this.syncGlobalState();
     }
 
+    startPractice(stage, phase) {
+      const targetStage = this.stageScripts[stage] ? stage : 1;
+      const script = this.stageScripts[targetStage].phases.BOSS;
+      const maxPhase = Math.max(1, script.phases.length);
+      const targetPhase = Math.max(1, Math.min(maxPhase, Math.floor(phase) || 1));
+
+      this.currentStage = targetStage;
+      this.stagePhase = stagePhase.BOSS;
+      this.state = `STAGE_${targetStage}_BOSS`;
+      this.phaseTimer = 0;
+      this.waveTimer = 0;
+      this.wavesSpawned = 0;
+      this.targetWaves = 0;
+      this.transitionTimer = 0;
+      this.clearTimer = 0;
+      this.clearHandled = false;
+      this.introDialogueDone = true;
+      this.pauseForDialogue = false;
+      this.bannerText = `PRACTICE ${targetStage}-${targetPhase}`;
+      this.bannerTimer = 1.8;
+      this.enemyManager.clearAll();
+      this.bulletManager.clearEnemyBullets();
+      this.bulletManager.clearGravityWell();
+      this.dialogueManager.hide();
+      this.bossController.activatePractice(script, targetStage, targetPhase);
+      this.syncGlobalState();
+    }
+
     updateBossCompletion() {
       if (!this.bossController.defeated) {
         return;

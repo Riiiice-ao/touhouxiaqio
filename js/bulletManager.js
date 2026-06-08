@@ -122,37 +122,43 @@
     }
 
     initBulletSprites() {
+      const bulletScale = 1.5;
+      const giantBubbleScale = 2;
       const createCanvas = (size) => {
         const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
+        canvas.width = Math.round(size);
+        canvas.height = Math.round(size);
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = true;
-        return { canvas, ctx, size };
+        return { canvas, ctx, size: Math.round(size) };
       };
 
       const cache = {
-        barrierCyan: createCanvas(120),
-        barrierGold: createCanvas(120),
-        mediumGreen: createCanvas(78),
-        mediumRed: createCanvas(78),
-        ricePurple: createCanvas(96),
+        visualScale: bulletScale,
+        giantBubbleScale,
+        barrierCyan: createCanvas(120 * bulletScale),
+        barrierGold: createCanvas(120 * bulletScale),
+        mediumBlue: createCanvas(78 * bulletScale),
+        mediumGreen: createCanvas(78 * bulletScale),
+        mediumRed: createCanvas(78 * bulletScale),
+        ricePurple: createCanvas(96 * bulletScale),
         auroraBubbleFrames: [
-          createCanvas(300),
-          createCanvas(300),
-          createCanvas(300),
-          createCanvas(300),
+          createCanvas(300 * bulletScale * giantBubbleScale),
+          createCanvas(300 * bulletScale * giantBubbleScale),
+          createCanvas(300 * bulletScale * giantBubbleScale),
+          createCanvas(300 * bulletScale * giantBubbleScale),
         ],
-        yinYangPetal: createCanvas(144),
-        darkPetal: createCanvas(144),
-        bubbleOrb: createCanvas(264),
-        whitePetal: createCanvas(84),
-        leafPetal: createCanvas(114),
-        orangePetal: createCanvas(126),
+        yinYangPetal: createCanvas(144 * bulletScale),
+        darkPetal: createCanvas(144 * bulletScale),
+        bubbleOrb: createCanvas(264 * bulletScale),
+        whitePetal: createCanvas(84 * bulletScale),
+        leafPetal: createCanvas(114 * bulletScale),
+        orangePetal: createCanvas(126 * bulletScale),
       };
 
       this.paintBoundaryOrb(cache.barrierCyan.ctx, cache.barrierCyan.size, "#00FFFF");
       this.paintBoundaryOrb(cache.barrierGold.ctx, cache.barrierGold.size, "#FFD700");
+      this.paintMediumGlowOrb(cache.mediumBlue.ctx, cache.mediumBlue.size, "#00FF66");
       this.paintMediumGlowOrb(cache.mediumGreen.ctx, cache.mediumGreen.size, "#00FF66");
       this.paintMediumGlowOrb(cache.mediumRed.ctx, cache.mediumRed.size, "#FF1E2F");
       this.paintRiceBullet(cache.ricePurple.ctx, cache.ricePurple.size);
@@ -322,7 +328,7 @@
       rim.addColorStop(0.75, `hsl(${h(142)}, 100%, 58%)`);
       rim.addColorStop(1, `hsl(${h(314)}, 100%, 72%)`);
       ctx.shadowColor = "rgba(84,214,255,0.52)";
-      ctx.shadowBlur = 18;
+      ctx.shadowBlur = 30;
       ctx.strokeStyle = rim;
       ctx.lineWidth = Math.max(2, size * 0.018);
       ctx.beginPath();
@@ -365,10 +371,10 @@
       ctx.shadowBlur = size * 0.13;
 
       const fill = ctx.createRadialGradient(-w * 0.16, -h * 0.10, 0, -w * 0.04, 0, w * 0.88);
-      fill.addColorStop(0, "rgba(255,230,234,0.95)");
-      fill.addColorStop(0.18, "#99001A");
-      fill.addColorStop(0.62, "#6F0717");
-      fill.addColorStop(1, "#4A0E17");
+      fill.addColorStop(0, "rgba(255,236,244,0.96)");
+      fill.addColorStop(0.22, "#C10026");
+      fill.addColorStop(0.58, "#7A003A");
+      fill.addColorStop(1, "#2A0626");
       tracePath();
       ctx.fillStyle = fill;
       ctx.fill();
@@ -437,9 +443,9 @@
       ctx.clip();
       const core = ctx.createRadialGradient(-w * 0.20, -h * 0.04, 0, -w * 0.10, 0, w * 0.56);
       core.addColorStop(0, "rgba(255,255,255,0.92)");
-      core.addColorStop(0.28, "rgba(255,190,205,0.74)");
-      core.addColorStop(0.62, "rgba(153,0,26,0.16)");
-      core.addColorStop(1, "rgba(74,14,23,0)");
+      core.addColorStop(0.28, "rgba(255,190,210,0.76)");
+      core.addColorStop(0.62, "rgba(193,0,38,0.18)");
+      core.addColorStop(1, "rgba(42,6,38,0)");
       ctx.fillStyle = core;
       ctx.fillRect(-size, -size, size * 2, size * 2);
       ctx.restore();
@@ -454,7 +460,7 @@
       ctx.shadowBlur = 0;
       tracePath();
       ctx.lineWidth = size * 0.02;
-      ctx.strokeStyle = "rgba(255,78,110,0.78)";
+      ctx.strokeStyle = "rgba(255,38,56,0.84)";
       ctx.stroke();
 
       ctx.beginPath();
@@ -842,8 +848,8 @@
     }
 
     update(deltaTime, player, enemyManager, bossController) {
-      const threshold = this.difficulty === "lunatic" ? 1250 : this.difficulty === "hard" ? 1350 : 1600;
-      if (this.enemyPool.count > threshold) {
+      const threshold = this.difficulty === "hard" ? 1350 : 1600;
+      if (this.difficulty !== "lunatic" && this.enemyPool.count > threshold) {
         this.globalSpeedScale = 0.95;
       } else {
         this.globalSpeedScale = 1;
@@ -898,8 +904,9 @@
         const dy = pool.y[slot] - player.y;
         const distance = Math.hypot(dx, dy);
         const hitRadius = pool.radius[slot] * collisionScale;
+        const deathRadius = player.getActiveDeathRadius ? player.getActiveDeathRadius() : player.deathRadius;
 
-        if (distance < player.deathRadius + hitRadius) {
+        if (distance < deathRadius + hitRadius) {
           player.takeDamage(slot);
           continue;
         }
@@ -1292,7 +1299,8 @@
       const radius = this.enemyPool.radius[slot];
       const color = this.enemyPool.colors[slot];
       const behaviorType = this.enemyPool.behaviorType[slot];
-      const visualScale = 1.5;
+      const visualScale = this.spriteCache.visualScale || 1.5;
+      const giantBubbleScale = this.spriteCache.giantBubbleScale || 2;
 
       if (color === "ROSE_MOTHER") {
         return { roseBloom: true, size: radius * 1.5 };
@@ -1302,7 +1310,7 @@
         const frameIndex = Math.floor(this.enemyPool.lifeTimer[slot] * 7) % this.spriteCache.auroraBubbleFrames.length;
         return {
           sprite: this.spriteCache.auroraBubbleFrames[frameIndex].canvas,
-          size: (radius + 18) * 2.8,
+          size: (radius + 18) * visualScale * giantBubbleScale,
           composite: "lighter",
         };
       }
@@ -1323,7 +1331,23 @@
         };
       }
 
-      if (color === "MEDIUM_GREEN" || color === "#00FF66" || color === "#8ec4ff") {
+      if (color === "GOLD_ORB") {
+        return {
+          sprite: this.spriteCache.barrierGold.canvas,
+          size: (radius + 7) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "MEDIUM_BLUE" || color === "#8ec4ff") {
+        return {
+          sprite: this.spriteCache.mediumBlue.canvas,
+          size: (radius + 8) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "MEDIUM_GREEN" || color === "#00FF66") {
         return {
           sprite: this.spriteCache.mediumGreen.canvas,
           size: (radius + 8) * visualScale,
