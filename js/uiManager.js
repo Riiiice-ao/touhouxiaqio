@@ -18,6 +18,7 @@
       this.pauseButton = document.getElementById("pauseButton");
       this.resumeButton = document.getElementById("resumeButton");
       this.restartButton = document.getElementById("restartButton");
+      this.pauseBackToMenuButton = document.getElementById("pauseBackToMenuButton");
       this.continueButton = document.getElementById("continueButton");
       this.endGameButton = document.getElementById("endGameButton");
       this.backToMenuButton = document.getElementById("backToMenuButton");
@@ -62,6 +63,7 @@
       this.pauseButton.addEventListener("click", actions.onPauseMenu);
       this.resumeButton.addEventListener("click", actions.onResume);
       this.restartButton.addEventListener("click", actions.onRestartConfirmed);
+      this.pauseBackToMenuButton.addEventListener("click", actions.onBackToMenu);
       this.continueButton.addEventListener("click", actions.onContinue);
       this.endGameButton.addEventListener("click", actions.onEndGame);
       this.backToMenuButton.addEventListener("click", actions.onBackToMenu);

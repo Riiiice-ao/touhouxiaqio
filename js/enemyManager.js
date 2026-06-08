@@ -109,6 +109,18 @@
       }
     }
 
+    spawnSideDuck(x, y, vx, vy, options = {}) {
+      const bulletSpeedBonus = this.difficulty === "hard" ? 1.18 : this.difficulty === "lunatic" ? 1.32 : 1;
+      const hpMultiplier = this.difficulty === "lunatic" ? 2.4 : this.difficulty === "hard" ? 1.8 : 1.2;
+      return this.spawnEnemy(TYPE_A, x, y, vx, vy, {
+        radius: options.radius || 14,
+        health: (options.health || 3) * hpMultiplier,
+        score: options.score || 130,
+        attackTimer: options.attackTimer || 0.72,
+        bulletSpeedBonus,
+      });
+    }
+
     spawnTypeBWave() {
       const fromLeft = Math.random() < 0.5;
       const originX = fromLeft ? -38 : GAME_WIDTH + 38;

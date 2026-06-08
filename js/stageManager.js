@@ -31,6 +31,7 @@
       this.difficulty = difficulty;
       this.enemyManager.setDifficulty(difficulty);
       this.bossController.setDifficulty(difficulty);
+      this.bulletManager.setDifficulty(difficulty);
     }
 
     reset() {

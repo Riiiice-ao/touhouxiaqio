@@ -20,6 +20,7 @@
   enemyManager.setItemManager(itemManager);
   const bossController = new global.BossController(emitter, bulletManager, bombEffect, assetLoader);
   bossController.setItemManager(itemManager);
+  bossController.setEnemyManager(enemyManager);
   const stageManager = new global.StageManager(enemyManager, bossController, bulletManager, dialogueManager);
   const player = new global.Player(input, bulletManager, hud, bombEffect, assetLoader);
   window.isAutoPlay = window.isAutoPlay || false;
@@ -441,6 +442,7 @@
     gradient.addColorStop(1, "#2a1018");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    applyBackgroundContrastFilter();
   }
 
   function drawScrollingBackground(image) {
@@ -450,6 +452,16 @@
 
     ctx.drawImage(image, 0, offsetY, drawWidth, drawHeight);
     ctx.drawImage(image, 0, offsetY - drawHeight, drawWidth, drawHeight);
+    applyBackgroundContrastFilter();
+  }
+
+  function applyBackgroundContrastFilter() {
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.38)";
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.fillStyle = "rgba(15, 10, 28, 0.18)";
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.restore();
   }
 
   requestAnimationFrame(gameLoop);

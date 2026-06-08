@@ -70,18 +70,24 @@
       name: "Boss 1",
       phaseName: "Delay Stasis",
       baseHealth: Math.floor(BOSS_MAX_HEALTH * 0.82),
-      totalTimeLimit: PHASE_TIME_LIMIT * 2,
+      totalTimeLimit: PHASE_TIME_LIMIT * 2 + 96,
       phases: [
         {
           name: "03 Delay Stasis",
           spellIds: ["DELAY_STASIS"],
           duration: PHASE_TIME_LIMIT,
-          threshold: 0.5,
+          threshold: 2 / 3,
         },
         {
           name: "05 Wave Ring",
           spellIds: ["WAVE_RING"],
           duration: PHASE_TIME_LIMIT,
+          threshold: 1 / 3,
+        },
+        {
+          name: "Final - Echoing Boundary",
+          spellIds: ["FINAL_SURVIVAL"],
+          duration: 96,
           threshold: 0,
         },
       ],
@@ -109,7 +115,7 @@
       phases: [
         {
           name: "07 Cluster Split",
-          spellIds: ["CLUSTER_SPLIT"],
+          spellIds: ["CLUSTER_SPLIT", "TIME_STOP_BLOOM"],
           duration: PHASE_TIME_LIMIT,
           threshold: 2 / 3,
         },
@@ -158,6 +164,7 @@
       this.bombEffect = bombEffect;
       this.assetLoader = assetLoader;
       this.itemManager = null;
+      this.enemyManager = null;
       this.radius = 30;
       this.entrySpeed = 140;
       this.lanePositions = [128, 236, 364, 472];
@@ -173,6 +180,10 @@
 
     setItemManager(itemManager) {
       this.itemManager = itemManager;
+    }
+
+    setEnemyManager(enemyManager) {
+      this.enemyManager = enemyManager;
     }
 
     configureSpriteGrid(stage) {
@@ -239,6 +250,19 @@
       this.lastFinaleBranch = -1;
       this.laserGrid = null;
       this.whiteLaser = null;
+      this.timeStopOverlayTimer = 0;
+      this.timeStopOverlayDuration = 0;
+      this.dashTimer = 2.0;
+      this.dashWarnTimer = 0;
+      this.dashActive = false;
+      this.dashElapsed = 0;
+      this.dashDuration = 0.78;
+      this.dashIndex = 0;
+      this.dashStartX = BOSS_ENTRY_X;
+      this.dashStartY = BOSS_ENTRY_Y;
+      this.dashEndX = BOSS_ENTRY_X;
+      this.dashEndY = BOSS_ENTRY_Y;
+      this.dashTrail = [];
       this.lastPlayer = null;
       this.audioAnalysis = { isBeat: false, musicFlow: 0 };
       global.HealthSystem.resetEntity(this, Math.floor(BOSS_MAX_HEALTH * this.difficultyHpMultiplier));
@@ -362,6 +386,7 @@
     updateBattle(deltaTime, player, audioAnalysis) {
       this.totalBattleTimer += deltaTime;
       this.phaseTimer += deltaTime;
+      this.timeStopOverlayTimer = Math.max(0, this.timeStopOverlayTimer - deltaTime);
 
       if (this.roleScript === bossRoles.argenti && this.totalBattleTimer >= TOTAL_ARGENTI_TIME_LIMIT) {
         this.beginTimedDeparture();
@@ -414,6 +439,10 @@
         this.updateSinePetalDrift(deltaTime);
       } else if (spellId === "FINALE_BRANCHES") {
         this.updateFinaleBranches(deltaTime, player);
+      } else if (spellId === "FINAL_SURVIVAL") {
+        this.updateFinalSurvival(deltaTime, player);
+      } else if (spellId === "TIME_STOP_BLOOM") {
+        this.updateTimeStopBloom(deltaTime);
       }
     }
 
@@ -544,7 +573,7 @@
       for (let i = 0; i < lanes; i += 1) {
         const offset = (i - (lanes - 1) * 0.5) * 16;
         const angle = base + offset + (i % 2 === 0 ? 0 : 12);
-        const velocity = this.emitter.angleToVelocity(angle, lunatic ? 171 : hard ? 154 : 134);
+        const velocity = this.emitter.angleToVelocity(angle, lunatic ? 134 : hard ? 120 : 105);
         this.bulletManager.spawnBullet(
           this.x + offset,
           this.y + 18,
@@ -648,17 +677,66 @@
       }
     }
 
+    updateTimeStopBloom(deltaTime) {
+      this.timerB -= deltaTime;
+      if (this.timerB > 0) {
+        return;
+      }
+
+      const hold = this.isLunatic() ? 2.25 : this.isHard() ? 2.05 : 1.8;
+      this.timerB += this.isLunatic() ? 5.2 : this.isHard() ? 6.0 : 7.0;
+      this.triggerTimeStopOverlay(hold);
+
+      const rings = this.isLunatic() ? 4 : this.isHard() ? 3 : 2;
+      const count = this.isLunatic() ? 14 : this.isHard() ? 12 : 10;
+      const base = this.phaseTimer * 0.9;
+      for (let ring = 0; ring < rings; ring += 1) {
+        const radius = 58 + ring * 42;
+        const twist = base + ring * 0.72;
+        for (let i = 0; i < count; i += 1) {
+          const t = i / count;
+          const angle = twist + Math.PI * 2 * t + Math.sin(t * Math.PI * 4 + this.phaseTimer) * 0.12;
+          const x = this.x + Math.cos(angle) * radius;
+          const y = this.y + 28 + Math.sin(angle) * radius * 0.7;
+          const releaseSpeed = (this.isLunatic() ? 188 : this.isHard() ? 164 : 142) + ring * 8;
+          this.bulletManager.spawnBullet(
+            x,
+            y,
+            0,
+            0,
+            6,
+            (i + ring) % 2 === 0 ? "ROSE_GILDED" : "PETAL_WHITE",
+            1,
+            {
+              type: BulletBehavior.DELAYED_RANDOM,
+              param0: 0.01,
+              param1: hold,
+              param2: releaseSpeed,
+              param3: 0,
+              angleOffset: angle,
+              spinSpeed: 0.9,
+            }
+          );
+        }
+      }
+    }
+
+    triggerTimeStopOverlay(duration) {
+      this.timeStopOverlayDuration = duration;
+      this.timeStopOverlayTimer = Math.max(this.timeStopOverlayTimer, duration);
+    }
+
     updateLaserGrid(deltaTime) {
       this.timerA -= deltaTime;
       if (this.timerA > 0) {
         return;
       }
 
-      this.timerA += this.isLunatic() ? 3.05 : this.isHard() ? 3.6 : 4.25;
+      this.timerA += this.isLunatic() ? 3.45 : this.isHard() ? 4.05 : 4.7;
       this.laserGrid = {
-        timer: 3.2,
-        warn: 1.2,
-        fire: 2,
+        timer: 3.75,
+        warn: 1.3,
+        fire: 2.45,
         baseX: this.x,
         sweep: Math.random() < 0.5 ? -1 : 1,
         offsets: [-162, -54, 54, 162],
@@ -769,7 +847,7 @@
         textColor: "rgba(255,253,208,0.96)",
       });
 
-      const ringCount = this.isLunatic() ? 28 : this.isHard() ? 22 : 18;
+      const ringCount = this.isLunatic() ? 34 : this.isHard() ? 27 : 22;
       const start = this.phaseTimer * 66;
       for (let i = 0; i < ringCount; i += 1) {
         const angle = start + (360 / ringCount) * i;
@@ -783,12 +861,122 @@
 
     fireWhiteLaserBranch(player) {
       this.whiteLaser = {
-        timer: 2.35,
-        warn: 0.55,
-        fire: 1.8,
+        timer: 2.95,
+        warn: 0.6,
+        fire: 2.35,
         wall: player.x < this.x ? -1 : 1,
         offset: 138,
       };
+    }
+
+    updateFinalSurvival(deltaTime, player) {
+      const phaseScript = this.getPhaseScript();
+      const duration = phaseScript?.duration || 96;
+      const progress = Math.max(0, Math.min(1, this.phaseTimer / duration));
+
+      this.timerA -= deltaTime;
+      while (this.timerA <= 0) {
+        this.timerA += Math.max(
+          0.095,
+          (this.isLunatic() ? 0.16 : this.isHard() ? 0.2 : 0.25) - progress * 0.045
+        );
+        this.fireFinalOrrery(progress);
+      }
+
+      this.timerB -= deltaTime;
+      if (this.timerB <= 0) {
+        this.timerB += Math.max(
+          2.35,
+          (this.isLunatic() ? 2.85 : this.isHard() ? 3.25 : 3.75) - progress * 0.3
+        );
+        this.fireFinalDuckEntry(progress);
+      }
+
+      this.timerC -= deltaTime;
+      if (this.timerC <= 0) {
+        this.timerC += Math.max(
+          1.8,
+          (this.isLunatic() ? 2.65 : this.isHard() ? 3.1 : 3.65) - progress * 0.72
+        );
+        this.fireFinalCometBurst(player, progress);
+      }
+    }
+
+    fireFinalOrrery(progress) {
+      const spokes = this.isLunatic() ? 13 : this.isHard() ? 11 : 9;
+      const base = this.phaseTimer * (2.2 + progress * 1.3);
+      const originRadius = 10 + Math.sin(this.phaseTimer * 3.1) * 5;
+
+      for (let i = 0; i < spokes; i += 1) {
+        const theta = base + (Math.PI * 2 * i) / spokes;
+        const rose = 1 + 0.2 * Math.sin(theta * 5 + this.phaseTimer * 1.7);
+        const angle = theta + 0.34 * Math.sin(theta * 3 - this.phaseTimer * 1.2);
+        const speed = (90 + progress * 74) * rose;
+        const spawnX = this.x + Math.cos(theta) * originRadius;
+        const spawnY = this.y + Math.sin(theta) * originRadius;
+        const velocity = {
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+        };
+
+        this.bulletManager.spawnBullet(
+          spawnX,
+          spawnY,
+          velocity.vx,
+          velocity.vy,
+          5.5,
+          i % 3 === 0 ? "PETAL_WHITE" : i % 3 === 1 ? "PETAL_ORANGE" : "PETAL_DARK",
+          1,
+          {
+            angleOffset: theta,
+            spinSpeed: 1.2 + progress * 1.4,
+          }
+        );
+      }
+    }
+
+    fireFinalDuckEntry(progress) {
+      if (!this.enemyManager || progress < 0.1 || progress > 0.62) {
+        return;
+      }
+
+      const count = this.isLunatic() ? 2 : this.isHard() ? 2 : 1;
+      const speed = this.isLunatic() ? 82 : this.isHard() ? 74 : 66;
+      const fromLeft = this.branchIndex % 2 === 0;
+      const baseY = 150 + Math.sin(this.phaseTimer * 1.7) * 28;
+      this.branchIndex += 1;
+
+      for (let i = 0; i < count; i += 1) {
+        const side = i % 2 === 0 ? fromLeft : !fromLeft;
+        const x = side ? -42 : GAME_WIDTH + 42;
+        const vx = side ? speed : -speed;
+        const y = baseY + i * 74 + Math.sin(this.phaseTimer * 2.1 + i) * 12;
+        this.enemyManager.spawnSideDuck(x, y, vx, 18 + progress * 18, {
+          health: this.isLunatic() ? 3 : 2.5,
+          attackTimer: 0.62 + i * 0.22,
+        });
+      }
+    }
+
+    fireFinalCometBurst(player, progress) {
+      const count = this.isLunatic() ? 38 : this.isHard() ? 31 : 25;
+      const aim = player
+        ? this.emitter.getAngleToTarget(this.x, this.y, player.x, player.y) * Math.PI / 180
+        : Math.PI * 0.5;
+      const base = aim + Math.sin(this.phaseTimer * 0.9) * 0.5;
+
+      for (let i = 0; i < count; i += 1) {
+        const t = count <= 1 ? 0.5 : i / (count - 1);
+        const theta = base - Math.PI * 0.86 + Math.PI * 1.72 * t;
+        const bend = Math.sin(t * Math.PI * 4 + this.phaseTimer * 2) * 0.18;
+        const speed = 112 + progress * 68 + Math.sin(i * 0.55 + this.phaseTimer) * 18;
+        const velocity = {
+          vx: Math.cos(theta + bend) * speed,
+          vy: Math.sin(theta + bend) * speed,
+        };
+
+        this.bulletManager.spawnBullet(this.x, this.y + 16, velocity.vx, velocity.vy, 7, "BARRIER_GOLD");
+      }
     }
 
     fireAimedSingle(player, speed, color, radius) {
@@ -827,7 +1015,8 @@
         return;
       }
 
-      const sweep = Math.sin((this.laserGrid.fire - this.laserGrid.timer) * 1.6) * 34 * this.laserGrid.sweep;
+      const progress = 1 - this.laserGrid.timer / this.laserGrid.fire;
+      const sweep = Math.sin(progress * Math.PI * 1.5) * 34 * this.laserGrid.sweep;
       for (let i = 0; i < this.laserGrid.offsets.length; i += 1) {
         const x = this.laserGrid.baseX + this.laserGrid.offsets[i] + sweep;
         if (Math.abs(player.x - x) < player.deathRadius + 11) {
@@ -842,7 +1031,8 @@
         return;
       }
 
-      const wallShift = Math.sin((this.whiteLaser.fire - this.whiteLaser.timer) * 1.8) * 32 * this.whiteLaser.wall;
+      const progress = 1 - this.whiteLaser.timer / this.whiteLaser.fire;
+      const wallShift = Math.sin(progress * Math.PI) * 32 * this.whiteLaser.wall;
       const lanes = [this.x - this.whiteLaser.offset + wallShift, this.x + this.whiteLaser.offset + wallShift];
       for (let i = 0; i < lanes.length; i += 1) {
         if (Math.abs(player.x - lanes[i]) < player.deathRadius + 7) {
@@ -873,6 +1063,11 @@
         return;
       }
 
+      if (this.roleScript === bossRoles.boss1 && this.phase === 1) {
+        this.updateBoss1DiagonalDash(deltaTime);
+        return;
+      }
+
       if (this.moveState === "moving") {
         this.moveElapsed += deltaTime;
         const progress = Math.min(1, this.moveElapsed / this.moveDuration);
@@ -895,6 +1090,74 @@
       if (this.stopTimer <= 0) {
         this.beginMoveTo(this.chooseNextDestination());
       }
+    }
+
+    updateBoss1DiagonalDash(deltaTime) {
+      if (this.dashActive) {
+        this.dashElapsed += deltaTime;
+        const progress = Math.min(1, this.dashElapsed / this.dashDuration);
+        const eased = progress < 0.5
+          ? 2 * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 2) * 0.5;
+        this.x = this.dashStartX + (this.dashEndX - this.dashStartX) * eased;
+        this.y = this.dashStartY + (this.dashEndY - this.dashStartY) * eased;
+        this.dashTrail.push({ x: this.x, y: this.y });
+        if (this.dashTrail.length > 9) {
+          this.dashTrail.shift();
+        }
+
+        if (progress >= 1) {
+          this.dashActive = false;
+          this.dashTimer = this.isLunatic() ? 3.4 : this.isHard() ? 4.0 : 4.7;
+          this.moveEndX = this.lanePositions[this.dashIndex % this.lanePositions.length] || BOSS_ENTRY_X;
+          this.moveState = "stopped";
+        }
+        return;
+      }
+
+      if (this.dashWarnTimer > 0) {
+        this.dashWarnTimer -= deltaTime;
+        const shake = Math.sin(this.dashWarnTimer * 42) * 2.2;
+        this.x = this.dashStartX + shake;
+        this.y = this.dashStartY;
+        if (this.dashWarnTimer <= 0) {
+          this.dashActive = true;
+          this.dashElapsed = 0;
+          this.dashTrail = [{ x: this.dashStartX, y: this.dashStartY }];
+        }
+        return;
+      }
+
+      const homeX = this.moveEndX || BOSS_ENTRY_X;
+      this.x += (homeX - this.x) * Math.min(1, deltaTime * 3.2);
+      this.y += (BOSS_ENTRY_Y - this.y) * Math.min(1, deltaTime * 3.2);
+      this.y += Math.sin(this.moveClock * 1.35) * 0.55;
+      this.dashTimer -= deltaTime;
+
+      if (this.dashTimer <= 0) {
+        this.beginBoss1DashWarning();
+      }
+    }
+
+    beginBoss1DashWarning() {
+      const paths = [
+        { sx: 82, sy: 116, ex: GAME_WIDTH - 82, ey: 326 },
+        { sx: GAME_WIDTH - 82, sy: 116, ex: 82, ey: 326 },
+        { sx: 150, sy: 96, ex: GAME_WIDTH - 150, ey: 282 },
+        { sx: GAME_WIDTH - 150, sy: 96, ex: 150, ey: 282 },
+      ];
+      const path = paths[this.dashIndex % paths.length];
+      this.dashIndex += 1;
+      this.dashStartX = path.sx;
+      this.dashStartY = path.sy;
+      this.dashEndX = path.ex;
+      this.dashEndY = path.ey;
+      this.dashDuration = this.isLunatic() ? 0.68 : this.isHard() ? 0.78 : 0.9;
+      this.dashWarnTimer = this.isLunatic() ? 0.38 : this.isHard() ? 0.48 : 0.58;
+      this.dashTrail = [];
+      this.x = this.dashStartX;
+      this.y = this.dashStartY;
+      this.moveState = "moving";
     }
 
     beginMoveTo(destinationX) {
@@ -953,8 +1216,9 @@
       this.phase = phase;
       this.phaseTimer = 0;
       this.phaseRewardMask = 0;
-      this.invulnerable = false;
-      this.phaseName = this.getPhaseScript()?.name || this.roleScript.phaseName;
+      const phaseScript = this.getPhaseScript();
+      this.invulnerable = Boolean(phaseScript?.survival);
+      this.phaseName = phaseScript?.name || this.roleScript.phaseName;
       this.timerA = 0.2;
       this.timerB = 0.15;
       this.timerC = 0.3;
@@ -965,6 +1229,13 @@
       this.lastFinaleBranch = -1;
       this.laserGrid = null;
       this.whiteLaser = null;
+      this.timeStopOverlayTimer = 0;
+      this.timeStopOverlayDuration = 0;
+      this.dashTimer = 2.0;
+      this.dashWarnTimer = 0;
+      this.dashActive = false;
+      this.dashElapsed = 0;
+      this.dashTrail = [];
       this.bulletManager.clearGravityWell();
       this.bulletManager.clearEnemyBullets();
 
@@ -972,8 +1243,8 @@
         this.bombEffect.start(this.x, this.y, this.phaseName, {
           clearsBullets: false,
           overlayAlpha: 0.24,
-          ringColor: phase === 2 ? "255, 215, 0" : "255, 253, 208",
-          shadowColor: phase === 2 ? "rgba(212, 31, 60, 0.50)" : "rgba(212, 175, 55, 0.50)",
+          ringColor: phase === 3 ? "255, 64, 112" : phase === 2 ? "255, 215, 0" : "255, 253, 208",
+          shadowColor: phase === 3 ? "rgba(255, 64, 112, 0.54)" : phase === 2 ? "rgba(212, 31, 60, 0.50)" : "rgba(212, 175, 55, 0.50)",
           textColor: "rgba(255,253,208,0.98)",
         });
       }
@@ -985,8 +1256,10 @@
     updatePhaseByHealth() {
       if (this.roleScript === bossRoles.boss1) {
         const ratio = global.HealthSystem.getRatio(this);
-        if (this.phase === 1 && ratio <= 0.5) {
-          this.beginPhase(2);
+        const currentPhase = this.roleScript.phases[this.phase - 1];
+        const threshold = currentPhase?.threshold ?? 0;
+        if (this.phase < this.roleScript.phases.length && threshold > 0 && ratio <= threshold) {
+          this.beginPhase(this.phase + 1);
         }
         return;
       }
@@ -1153,10 +1426,12 @@
 
       const sprite = this.assetLoader.get(this.bossSpriteKey) || this.assetLoader.get("boss");
       if (sprite) {
+        this.renderDashTrail(ctx);
         this.drawBoss(ctx, sprite);
         return;
       }
 
+      this.renderDashTrail(ctx);
       ctx.save();
       const bodyGlow = ctx.createRadialGradient(this.x, this.y, 8, this.x, this.y, 40);
       bodyGlow.addColorStop(0, Palette.moon);
@@ -1171,6 +1446,27 @@
       ctx.beginPath();
       ctx.arc(this.x, this.y, 36, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+    }
+
+    renderDashTrail(ctx) {
+      if (!this.dashTrail || this.dashTrail.length < 2) {
+        return;
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 1; i < this.dashTrail.length; i += 1) {
+        const prev = this.dashTrail[i - 1];
+        const point = this.dashTrail[i];
+        const alpha = i / this.dashTrail.length;
+        ctx.strokeStyle = `rgba(255, 215, 112, ${alpha * 0.34})`;
+        ctx.lineWidth = 5 * alpha;
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -1299,7 +1595,7 @@
         const progress = warning
           ? 1 - (this.laserGrid.timer - this.laserGrid.fire) / this.laserGrid.warn
           : 1 - this.laserGrid.timer / this.laserGrid.fire;
-        const sweep = warning ? 0 : Math.sin(progress * Math.PI * 2) * 34 * this.laserGrid.sweep;
+        const sweep = warning ? 0 : Math.sin(progress * Math.PI * 1.5) * 34 * this.laserGrid.sweep;
         for (let i = 0; i < this.laserGrid.offsets.length; i += 1) {
           const x = this.laserGrid.baseX + this.laserGrid.offsets[i] + sweep;
           this.drawVerticalLaser(
@@ -1318,7 +1614,7 @@
         const progress = warning
           ? 1 - (this.whiteLaser.timer - this.whiteLaser.fire) / this.whiteLaser.warn
           : 1 - this.whiteLaser.timer / this.whiteLaser.fire;
-        const wallShift = warning ? 0 : Math.sin(progress * Math.PI * 1.4) * 32 * this.whiteLaser.wall;
+        const wallShift = warning ? 0 : Math.sin(progress * Math.PI) * 32 * this.whiteLaser.wall;
         const lanes = [this.x - this.whiteLaser.offset + wallShift, this.x + this.whiteLaser.offset + wallShift];
         for (let i = 0; i < lanes.length; i += 1) {
           this.drawVerticalLaser(
@@ -1331,6 +1627,22 @@
           );
         }
       }
+    }
+
+    renderTimeStopOverlay(ctx) {
+      if (this.timeStopOverlayTimer <= 0 || this.timeStopOverlayDuration <= 0) {
+        return;
+      }
+
+      const progress = this.timeStopOverlayTimer / this.timeStopOverlayDuration;
+      const pulse = 0.5 + Math.sin(this.phaseTimer * 10) * 0.08;
+      const alpha = Math.max(0, Math.min(0.56, 0.18 + progress * 0.22 + pulse * 0.12));
+      ctx.save();
+      ctx.fillStyle = `rgba(30, 32, 38, ${alpha})`;
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      ctx.fillStyle = `rgba(220, 226, 235, ${alpha * 0.18})`;
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      ctx.restore();
     }
 
     drawVerticalLaser(ctx, x, width, color, blur, shadowColor) {
@@ -1354,6 +1666,7 @@
         return;
       }
 
+      this.renderTimeStopOverlay(ctx);
       this.renderLaserHazards(ctx);
 
       const width = this.roleScript === bossRoles.argenti ? 410 : 340;
