@@ -46,6 +46,7 @@
       this.bannerTimer = 2.0;
       this.clearTimer = 0;
       this.clearHandled = false;
+      this.practiceActive = false;
       this.transitionTimer = 0;
       this.introDialogueDone = false;
       this.pauseForDialogue = false;
@@ -109,6 +110,7 @@
 
       if (this.stagePhase === stagePhase.MID_BOSS || this.stagePhase === stagePhase.BOSS) {
         this.bossController.update(deltaTime, player, audioAnalysis);
+        this.enemyManager.update(deltaTime, player);
         this.updateBossCompletion();
         return;
       }
@@ -170,13 +172,17 @@
 
     startPractice(stage, phase) {
       const targetStage = this.stageScripts[stage] ? stage : 1;
-      const script = this.stageScripts[targetStage].phases.BOSS;
+      const roleKey = Number(phase) === 0 ? "MID_BOSS" : "BOSS";
+      const script = this.stageScripts[targetStage].phases[roleKey] || this.stageScripts[targetStage].phases.BOSS;
       const maxPhase = Math.max(1, script.phases.length);
-      const targetPhase = Math.max(1, Math.min(maxPhase, Math.floor(phase) || 1));
+      const targetPhase = roleKey === "MID_BOSS"
+        ? 1
+        : Math.max(1, Math.min(maxPhase, Math.floor(phase) || 1));
+      const phaseLabel = roleKey === "MID_BOSS" ? "MID" : targetPhase;
 
       this.currentStage = targetStage;
-      this.stagePhase = stagePhase.BOSS;
-      this.state = `STAGE_${targetStage}_BOSS`;
+      this.stagePhase = roleKey === "MID_BOSS" ? stagePhase.MID_BOSS : stagePhase.BOSS;
+      this.state = `STAGE_${targetStage}_${this.stagePhase}`;
       this.phaseTimer = 0;
       this.waveTimer = 0;
       this.wavesSpawned = 0;
@@ -186,13 +192,14 @@
       this.clearHandled = false;
       this.introDialogueDone = true;
       this.pauseForDialogue = false;
-      this.bannerText = `PRACTICE ${targetStage}-${targetPhase}`;
+      this.practiceActive = true;
+      this.bannerText = `PRACTICE ${targetStage}-${phaseLabel}`;
       this.bannerTimer = 1.8;
       this.enemyManager.clearAll();
       this.bulletManager.clearEnemyBullets();
       this.bulletManager.clearGravityWell();
       this.dialogueManager.hide();
-      this.bossController.activatePractice(script, targetStage, targetPhase);
+      this.bossController.activatePractice(script, targetStage, targetPhase, roleKey);
       this.syncGlobalState();
     }
 
@@ -204,6 +211,19 @@
       const timedOut = this.bossController.timedOut && !this.bossController.wasKilled;
       this.bulletManager.clearEnemyBullets();
       this.bulletManager.clearGravityWell();
+
+      if (this.practiceActive) {
+        this.practiceActive = false;
+        this.stagePhase = stagePhase.CLEAR;
+        this.state = "PRACTICE_CLEAR";
+        this.bannerText = timedOut ? "PRACTICE TIME UP" : "PRACTICE CLEAR";
+        this.bannerTimer = 2.5;
+        this.clearTimer = 2.5;
+        this.clearHandled = false;
+        this.enemyManager.clearAll();
+        this.syncGlobalState();
+        return;
+      }
 
       if (timedOut) {
         this.stagePhase = stagePhase.TIMEOUT_CLEAR;

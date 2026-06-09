@@ -115,7 +115,7 @@
       phases: [
         {
           name: "07 Cluster Split",
-          spellIds: ["CLUSTER_SPLIT", "TIME_STOP_BLOOM"],
+          spellIds: ["TIME_STOP_BLOOM", "CLUSTER_SPLIT"],
           duration: PHASE_TIME_LIMIT,
           threshold: 2 / 3,
         },
@@ -257,12 +257,18 @@
       this.dashActive = false;
       this.dashElapsed = 0;
       this.dashDuration = 0.78;
+      this.dashShotTimer = 0;
       this.dashIndex = 0;
       this.dashStartX = BOSS_ENTRY_X;
       this.dashStartY = BOSS_ENTRY_Y;
       this.dashEndX = BOSS_ENTRY_X;
       this.dashEndY = BOSS_ENTRY_Y;
       this.dashTrail = [];
+      this.finalDuckGlyphFired = false;
+      this.roseVolleyId = 0;
+      this.roseVolleyHistory = [];
+      this.currentRoseGroupId = 0;
+      this.roseGroupReleaseIndex = 0;
       this.lastPlayer = null;
       this.audioAnalysis = { isBeat: false, musicFlow: 0 };
       global.HealthSystem.resetEntity(this, Math.floor(BOSS_MAX_HEALTH * this.difficultyHpMultiplier));
@@ -288,15 +294,16 @@
       global.HealthSystem.resetEntity(this, Math.floor(this.roleScript.baseHealth * this.difficultyHpMultiplier));
     }
 
-    activatePractice(script, currentStage = 1, phase = 1) {
-      this.activateEntry(script, currentStage, "BOSS");
+    activatePractice(script, currentStage = 1, phase = 1, stagePhase = "BOSS") {
+      this.activateEntry(script, currentStage, stagePhase);
       const maxPhase = Math.max(1, this.roleScript.phases.length);
       const targetPhase = Math.max(1, Math.min(maxPhase, Math.floor(phase) || 1));
+      const practiceY = stagePhase === "MID_BOSS" ? 145 : BOSS_ENTRY_Y;
 
       this.x = this.pickTargetX();
-      this.y = BOSS_ENTRY_Y;
+      this.y = practiceY;
       this.targetX = this.x;
-      this.targetY = BOSS_ENTRY_Y;
+      this.targetY = practiceY;
       this.moveEndX = this.x;
       this.moveStartX = this.x;
       this.prevX = this.x;
@@ -566,14 +573,20 @@
 
       const hard = this.isHard();
       const lunatic = this.isLunatic();
-      this.timerA += lunatic ? 0.18 : hard ? 0.24 : 0.31;
-      const lanes = lunatic ? 3 : hard ? 2 : 1;
+      this.timerA += lunatic ? 0.28 : hard ? 0.38 : 0.52;
+      const reflectLimit = lunatic ? 44 : hard ? 32 : 24;
+      const activeReflectCount = this.bulletManager.countEnemyBulletsByBehavior(BulletBehavior.REFLECT_BOUND);
+      if (activeReflectCount >= reflectLimit) {
+        return;
+      }
+
+      const lanes = Math.min(lunatic ? 2 : 1, reflectLimit - activeReflectCount);
       const base = 58 + Math.sin(this.phaseTimer * 3.8) * 18;
 
       for (let i = 0; i < lanes; i += 1) {
-        const offset = (i - (lanes - 1) * 0.5) * 16;
+        const offset = (i - (lanes - 1) * 0.5) * 18;
         const angle = base + offset + (i % 2 === 0 ? 0 : 12);
-        const velocity = this.emitter.angleToVelocity(angle, lunatic ? 134 : hard ? 120 : 105);
+        const velocity = this.emitter.angleToVelocity(angle, lunatic ? 105 : hard ? 94 : 84);
         this.bulletManager.spawnBullet(
           this.x + offset,
           this.y + 18,
@@ -655,26 +668,91 @@
         return;
       }
 
-      this.timerA += this.isLunatic() ? 0.66 : this.isHard() ? 0.84 : 1.06;
-      const spreads = this.isLunatic() ? [-42, 0, 42] : this.isHard() ? [-28, 28] : [0];
-      for (let i = 0; i < spreads.length; i += 1) {
-        const velocity = this.emitter.angleToVelocity(90 + spreads[i] * 0.28, 58 + i * 8);
+      if (!this.currentRoseGroupId || this.roseGroupReleaseIndex >= 12) {
+        this.currentRoseGroupId = this.beginRoseVolleyGroup();
+        this.roseGroupReleaseIndex = 0;
+      }
+
+      this.fireRoseMotherRelease(this.currentRoseGroupId, this.roseGroupReleaseIndex);
+      this.roseGroupReleaseIndex += 1;
+
+      if (this.roseGroupReleaseIndex >= 12) {
+        this.currentRoseGroupId = 0;
+        this.timerA += this.isLunatic() ? 2.25 : this.isHard() ? 2.7 : 3.15;
+        return;
+      }
+
+      const innerBeat = this.isLunatic() ? 0.26 : this.isHard() ? 0.32 : 0.4;
+      this.timerA += this.roseGroupReleaseIndex % 4 === 0 ? innerBeat * 2.05 : innerBeat;
+    }
+
+    fireRoseMotherRelease(groupId, releaseIndex) {
+      const ring = Math.floor(releaseIndex / 4);
+      const petal = releaseIndex % 4;
+      const stasisActive = this.timeStopOverlayTimer > 0.08;
+      const budCount = this.isLunatic() ? 2 : this.isHard() ? 2 : 1;
+      const crownRadius = 34 + ring * 24;
+      const crownYScale = 0.58;
+      const phaseDrift = this.phaseTimer * 0.34;
+      const baseTheta = phaseDrift + petal * Math.PI * 0.5 + ring * Math.PI * 0.18;
+
+      for (let i = 0; i < budCount; i += 1) {
+        const theta = baseTheta + (Math.PI * 2 * i) / budCount;
+        const roseFold = Math.sin(theta * 3 + ring * 0.7) * 7;
+        const anchorX = this.x + Math.cos(theta) * (crownRadius + roseFold);
+        const anchorY = this.y + 34 + Math.sin(theta) * crownRadius * crownYScale + ring * 8;
+        const releaseAngle = 90 + Math.sin(theta) * 18 + (i - (budCount - 1) * 0.5) * 8;
+        const releaseSpeed = 34 + ring * 9 + petal * 2;
+        const velocity = this.emitter.angleToVelocity(releaseAngle, releaseSpeed);
+        const splitCount = this.isLunatic() ? 14 : this.isHard() ? 12 : 10;
+        const splitSpeed = this.isLunatic() ? 162 : this.isHard() ? 142 : 126;
+
         this.bulletManager.spawnBullet(
-          this.x + spreads[i],
-          this.y + 12,
-          velocity.vx,
-          velocity.vy,
-          20,
+          anchorX,
+          anchorY,
+          stasisActive ? 0 : velocity.vx,
+          stasisActive ? 0 : velocity.vy,
+          18 + ring * 1.5,
           "ROSE_MOTHER",
           1,
-          {
-            type: BulletBehavior.SPLIT_BURST,
-            param0: 1.03,
-            param1: 18,
-            param2: this.isLunatic() ? 188 : 164,
-          }
+          stasisActive
+            ? {
+                type: BulletBehavior.STASIS_SPLIT_BURST,
+                param0: 0.12 + petal * 0.015,
+                param1: splitCount,
+                param2: splitSpeed,
+                param3: this.timeStopOverlayTimer + 0.08,
+                angleOffset: theta,
+                groupId,
+              }
+            : {
+                type: BulletBehavior.SPLIT_BURST,
+                param0: 0.92 + ring * 0.12 + petal * 0.035,
+                param1: splitCount,
+                param2: splitSpeed,
+                angleOffset: theta,
+                groupId,
+              }
         );
       }
+    }
+
+    beginRoseVolleyGroup() {
+      this.roseVolleyId = (this.roseVolleyId % 60000) + 1;
+      this.roseVolleyHistory.push(this.roseVolleyId);
+
+      if (this.roseVolleyHistory.length > 3) {
+        const staleGroupId = this.roseVolleyHistory.shift();
+        this.bulletManager.clearEnemyBulletsByGroupId(staleGroupId, [
+          "ROSE_MOTHER",
+          "ROSE_GILDED",
+          "PETAL_WHITE",
+          "PETAL_DARK",
+          "YINYANG_PETAL",
+        ], true);
+      }
+
+      return this.roseVolleyId;
     }
 
     updateTimeStopBloom(deltaTime) {
@@ -683,22 +761,24 @@
         return;
       }
 
-      const hold = this.isLunatic() ? 2.25 : this.isHard() ? 2.05 : 1.8;
-      this.timerB += this.isLunatic() ? 5.2 : this.isHard() ? 6.0 : 7.0;
+      const hold = this.isLunatic() ? 2.45 : this.isHard() ? 2.2 : 1.95;
+      this.timerB += this.isLunatic() ? 8.2 : this.isHard() ? 9.4 : 10.8;
       this.triggerTimeStopOverlay(hold);
+      this.bulletManager.freezeRoseBullets(hold);
 
-      const rings = this.isLunatic() ? 4 : this.isHard() ? 3 : 2;
-      const count = this.isLunatic() ? 14 : this.isHard() ? 12 : 10;
-      const base = this.phaseTimer * 0.9;
+      const rings = this.isLunatic() ? 3 : this.isHard() ? 3 : 2;
+      const count = this.isLunatic() ? 11 : this.isHard() ? 10 : 8;
+      const base = this.phaseTimer * 0.72;
       for (let ring = 0; ring < rings; ring += 1) {
-        const radius = 58 + ring * 42;
-        const twist = base + ring * 0.72;
+        const radius = 54 + ring * 38;
+        const twist = base + ring * 0.62;
         for (let i = 0; i < count; i += 1) {
           const t = i / count;
-          const angle = twist + Math.PI * 2 * t + Math.sin(t * Math.PI * 4 + this.phaseTimer) * 0.12;
+          const angle = twist + Math.PI * 2 * t + Math.sin(t * Math.PI * 4 + this.phaseTimer) * 0.08;
           const x = this.x + Math.cos(angle) * radius;
           const y = this.y + 28 + Math.sin(angle) * radius * 0.7;
-          const releaseSpeed = (this.isLunatic() ? 188 : this.isHard() ? 164 : 142) + ring * 8;
+          const releaseAngle = angle + Math.PI * 0.5 + (ring % 2 === 0 ? 0.24 : -0.24);
+          const releaseSpeed = (this.isLunatic() ? 176 : this.isHard() ? 154 : 136) + ring * 8;
           this.bulletManager.spawnBullet(
             x,
             y,
@@ -708,12 +788,10 @@
             (i + ring) % 2 === 0 ? "ROSE_GILDED" : "PETAL_WHITE",
             1,
             {
-              type: BulletBehavior.DELAYED_RANDOM,
-              param0: 0.01,
-              param1: hold,
-              param2: releaseSpeed,
-              param3: 0,
-              angleOffset: angle,
+              type: BulletBehavior.DELAYED_VECTOR,
+              param0: hold,
+              param1: releaseSpeed,
+              angleOffset: releaseAngle,
               spinSpeed: 0.9,
             }
           );
@@ -847,7 +925,7 @@
         textColor: "rgba(255,253,208,0.96)",
       });
 
-      const ringCount = this.isLunatic() ? 34 : this.isHard() ? 27 : 22;
+      const ringCount = this.isLunatic() ? 46 : this.isHard() ? 38 : 31;
       const start = this.phaseTimer * 66;
       for (let i = 0; i < ringCount; i += 1) {
         const angle = start + (360 / ringCount) * i;
@@ -874,6 +952,11 @@
       const duration = phaseScript?.duration || 96;
       const progress = Math.max(0, Math.min(1, this.phaseTimer / duration));
 
+      if (!this.finalDuckGlyphFired && this.phaseTimer >= 0.18) {
+        this.finalDuckGlyphFired = true;
+        this.fireFinalDuckGlyph();
+      }
+
       this.timerA -= deltaTime;
       while (this.timerA <= 0) {
         this.timerA += Math.max(
@@ -886,8 +969,8 @@
       this.timerB -= deltaTime;
       if (this.timerB <= 0) {
         this.timerB += Math.max(
-          2.35,
-          (this.isLunatic() ? 2.85 : this.isHard() ? 3.25 : 3.75) - progress * 0.3
+          1.85,
+          (this.isLunatic() ? 2.12 : this.isHard() ? 2.42 : 2.78) - progress * 0.36
         );
         this.fireFinalDuckEntry(progress);
       }
@@ -935,25 +1018,78 @@
       }
     }
 
+    fireFinalDuckGlyph() {
+      const glyph = [
+        "......YYYY.....",
+        "....YYYYYYY....",
+        "...YYYYYYYYY...",
+        "...YYYYYYYYYYG.",
+        "..YYYYYYYYYYYGG",
+        ".YYYYYYYYYYYYG.",
+        ".YYYYYYYYYYY...",
+        "..YYYYYYYYY....",
+        "...YYYYYY......",
+        "....YY..YY.....",
+      ];
+      const cell = 9;
+      const width = glyph[0].length * cell;
+      const originX = GAME_WIDTH * 0.5 - width * 0.5;
+      const originY = 118;
+      const centerX = originX + width * 0.5;
+      const centerY = originY + glyph.length * cell * 0.5;
+
+      for (let row = 0; row < glyph.length; row += 1) {
+        for (let col = 0; col < glyph[row].length; col += 1) {
+          const mark = glyph[row][col];
+          if (mark === ".") {
+            continue;
+          }
+
+          const x = originX + col * cell + Math.sin(row * 1.7 + col) * 1.1;
+          const y = originY + row * cell + Math.cos(col * 1.4) * 0.8;
+          const outward = Math.atan2(y - centerY, x - centerX);
+          const spiral = outward + 0.42 + Math.sin(row * 0.7 + col * 0.4) * 0.08;
+          const releaseSpeed = 96 + row * 4 + (col % 4) * 5;
+          this.bulletManager.spawnBullet(
+            x,
+            y,
+            0,
+            0,
+            mark === "G" ? 5.4 : 5.8,
+            mark === "G" ? "PETAL_GOLD" : "GOLD_ORB",
+            1,
+            {
+              type: BulletBehavior.DELAYED_VECTOR,
+              param0: 1.08 + row * 0.028,
+              param1: releaseSpeed,
+              angleOffset: spiral,
+              spinSpeed: 0.8,
+            }
+          );
+        }
+      }
+    }
+
     fireFinalDuckEntry(progress) {
-      if (!this.enemyManager || progress < 0.1 || progress > 0.62) {
+      if (!this.enemyManager || this.phaseTimer < 3.0 || this.phaseTimer > 38.0) {
         return;
       }
 
-      const count = this.isLunatic() ? 2 : this.isHard() ? 2 : 1;
-      const speed = this.isLunatic() ? 82 : this.isHard() ? 74 : 66;
+      const count = this.isLunatic() ? 3 : this.isHard() ? 2 : 2;
+      const speed = this.isLunatic() ? 78 : this.isHard() ? 70 : 62;
       const fromLeft = this.branchIndex % 2 === 0;
-      const baseY = 150 + Math.sin(this.phaseTimer * 1.7) * 28;
+      const baseY = 132 + Math.sin(this.phaseTimer * 1.7) * 18;
       this.branchIndex += 1;
 
       for (let i = 0; i < count; i += 1) {
         const side = i % 2 === 0 ? fromLeft : !fromLeft;
         const x = side ? -42 : GAME_WIDTH + 42;
         const vx = side ? speed : -speed;
-        const y = baseY + i * 74 + Math.sin(this.phaseTimer * 2.1 + i) * 12;
-        this.enemyManager.spawnSideDuck(x, y, vx, 18 + progress * 18, {
-          health: this.isLunatic() ? 3 : 2.5,
-          attackTimer: 0.62 + i * 0.22,
+        const formationOffset = (i - (count - 1) * 0.5) * 58;
+        const y = baseY + formationOffset + Math.sin(this.phaseTimer * 2.1 + i) * 8;
+        this.enemyManager.spawnSideDuck(x, y, vx, 12 + progress * 12, {
+          health: this.isLunatic() ? 2.6 : 2.1,
+          attackTimer: 0.58 + i * 0.18,
         });
       }
     }
@@ -1101,6 +1237,11 @@
           : 1 - Math.pow(-2 * progress + 2, 2) * 0.5;
         this.x = this.dashStartX + (this.dashEndX - this.dashStartX) * eased;
         this.y = this.dashStartY + (this.dashEndY - this.dashStartY) * eased;
+        this.dashShotTimer -= deltaTime;
+        if (this.dashShotTimer <= 0) {
+          this.dashShotTimer += this.isLunatic() ? 0.085 : this.isHard() ? 0.105 : 0.13;
+          this.fireBoss1DashCurtain(progress);
+        }
         this.dashTrail.push({ x: this.x, y: this.y });
         if (this.dashTrail.length > 9) {
           this.dashTrail.shift();
@@ -1111,18 +1252,19 @@
           this.dashTimer = this.isLunatic() ? 3.4 : this.isHard() ? 4.0 : 4.7;
           this.moveEndX = this.lanePositions[this.dashIndex % this.lanePositions.length] || BOSS_ENTRY_X;
           this.moveState = "stopped";
+          this.dashShotTimer = 0;
         }
         return;
       }
 
       if (this.dashWarnTimer > 0) {
         this.dashWarnTimer -= deltaTime;
-        const shake = Math.sin(this.dashWarnTimer * 42) * 2.2;
-        this.x = this.dashStartX + shake;
+        this.x = this.dashStartX;
         this.y = this.dashStartY;
         if (this.dashWarnTimer <= 0) {
           this.dashActive = true;
           this.dashElapsed = 0;
+          this.dashShotTimer = 0;
           this.dashTrail = [{ x: this.dashStartX, y: this.dashStartY }];
         }
         return;
@@ -1141,10 +1283,10 @@
 
     beginBoss1DashWarning() {
       const paths = [
-        { sx: 82, sy: 116, ex: GAME_WIDTH - 82, ey: 326 },
-        { sx: GAME_WIDTH - 82, sy: 116, ex: 82, ey: 326 },
-        { sx: 150, sy: 96, ex: GAME_WIDTH - 150, ey: 282 },
-        { sx: GAME_WIDTH - 150, sy: 96, ex: 150, ey: 282 },
+        { sx: 82, sy: 106, ex: GAME_WIDTH - 82, ey: GAME_HEIGHT - 76 },
+        { sx: GAME_WIDTH - 82, sy: 106, ex: 82, ey: GAME_HEIGHT - 76 },
+        { sx: 154, sy: 92, ex: GAME_WIDTH - 154, ey: GAME_HEIGHT - 92 },
+        { sx: GAME_WIDTH - 154, sy: 92, ex: 154, ey: GAME_HEIGHT - 92 },
       ];
       const path = paths[this.dashIndex % paths.length];
       this.dashIndex += 1;
@@ -1158,6 +1300,37 @@
       this.x = this.dashStartX;
       this.y = this.dashStartY;
       this.moveState = "moving";
+    }
+
+    fireBoss1DashCurtain(progress) {
+      const count = this.isLunatic() ? 9 : this.isHard() ? 7 : 6;
+      const rowWidth = this.isLunatic() ? 176 : this.isHard() ? 152 : 134;
+      const pathAngle = Math.atan2(this.dashEndY - this.dashStartY, this.dashEndX - this.dashStartX);
+      const normal = pathAngle + Math.PI * 0.5;
+      const baseSpeed = this.isLunatic() ? 142 : this.isHard() ? 126 : 112;
+
+      for (let i = 0; i < count; i += 1) {
+        const t = count <= 1 ? 0.5 : i / (count - 1);
+        const offset = (t - 0.5) * rowWidth;
+        const spawnX = this.x + Math.cos(normal) * offset;
+        const spawnY = this.y + Math.sin(normal) * offset + 12;
+        const angle = Math.PI * 0.5 + (t - 0.5) * 0.48 + Math.sin(progress * Math.PI * 2 + i) * 0.08;
+        const speed = baseSpeed + (i % 2) * 9;
+
+        this.bulletManager.spawnBullet(
+          spawnX,
+          spawnY,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed,
+          5.2,
+          i % 2 === 0 ? "GOLD_ORB" : "PETAL_ORANGE",
+          1,
+          {
+            angleOffset: angle,
+            spinSpeed: 0.9,
+          }
+        );
+      }
     }
 
     beginMoveTo(destinationX) {
@@ -1235,7 +1408,13 @@
       this.dashWarnTimer = 0;
       this.dashActive = false;
       this.dashElapsed = 0;
+      this.dashShotTimer = 0;
       this.dashTrail = [];
+      this.finalDuckGlyphFired = false;
+      this.roseVolleyId = 0;
+      this.roseVolleyHistory = [];
+      this.currentRoseGroupId = 0;
+      this.roseGroupReleaseIndex = 0;
       this.bulletManager.clearGravityWell();
       this.bulletManager.clearEnemyBullets();
 

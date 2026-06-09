@@ -17,6 +17,8 @@
     REFLECT_BOUND: 6,
     ORBITAL_SATELLITE: 7,
     BUBBLE_SINE: 8,
+    STASIS_SPLIT_BURST: 9,
+    DELAYED_VECTOR: 10,
   };
 
   global.BulletBehavior = BulletBehavior;
@@ -80,6 +82,7 @@
         originY: new Float32Array(capacity),
         angleOffset: new Float32Array(capacity),
         spinSpeed: new Float32Array(capacity),
+        groupId: new Uint16Array(capacity),
         active: new Uint8Array(capacity),
         grazed: new Uint8Array(capacity),
         activeIndices: new Int32Array(capacity),
@@ -838,6 +841,7 @@
       pool.originY[slot] = behavior?.originY ?? y;
       pool.angleOffset[slot] = behavior?.angleOffset ?? 0;
       pool.spinSpeed[slot] = behavior?.spinSpeed ?? 0;
+      pool.groupId[slot] = behavior?.groupId ?? 0;
       pool.active[slot] = 1;
       pool.grazed[slot] = 0;
 
@@ -950,6 +954,26 @@
         return false;
       }
 
+      if (behaviorType === BulletBehavior.STASIS_SPLIT_BURST) {
+        if (pool.behaviorState[slot] === 0) {
+          pool.vx[slot] = 0;
+          pool.vy[slot] = 0;
+          if (pool.lifeTimer[slot] >= pool.param3[slot]) {
+            pool.behaviorState[slot] = 1;
+            pool.lifeTimer[slot] = 0;
+          }
+          return false;
+        }
+
+        pool.vx[slot] = 0;
+        pool.vy[slot] = 0;
+        if (pool.lifeTimer[slot] >= pool.param0[slot]) {
+          this.explodeSplitBurst(slot);
+          return true;
+        }
+        return false;
+      }
+
       if (behaviorType === BulletBehavior.DELAYED_RANDOM) {
         if (pool.behaviorState[slot] === 0) {
           const dragFactor = Math.max(0, 1 - pool.param3[slot] * deltaTime);
@@ -972,6 +996,21 @@
           pool.vy[slot] = Math.sin(randomAngle) * speed;
           pool.behaviorState[slot] = 2;
           pool.lifeTimer[slot] = 0;
+        }
+        return false;
+      }
+
+      if (behaviorType === BulletBehavior.DELAYED_VECTOR) {
+        if (pool.behaviorState[slot] === 0) {
+          pool.vx[slot] = 0;
+          pool.vy[slot] = 0;
+          if (pool.lifeTimer[slot] >= pool.param0[slot]) {
+            const speed = pool.param1[slot];
+            pool.vx[slot] = Math.cos(pool.angleOffset[slot]) * speed;
+            pool.vy[slot] = Math.sin(pool.angleOffset[slot]) * speed;
+            pool.behaviorState[slot] = 1;
+            pool.lifeTimer[slot] = 0;
+          }
         }
         return false;
       }
@@ -1049,6 +1088,41 @@
       return false;
     }
 
+    freezeRoseBullets(duration) {
+      const pool = this.enemyPool;
+      const roseColors = ["ROSE_MOTHER", "ROSE_GILDED", "PETAL_WHITE", "PETAL_DARK", "YINYANG_PETAL"];
+
+      for (let i = 0; i < pool.count; i += 1) {
+        const slot = pool.activeIndices[i];
+        const color = pool.colors[slot];
+        if (!roseColors.includes(color)) {
+          continue;
+        }
+
+        const speed = Math.max(96, Math.hypot(pool.vx[slot], pool.vy[slot]));
+        pool.vx[slot] = 0;
+        pool.vy[slot] = 0;
+        pool.lifeTimer[slot] = 0;
+
+        if (color === "ROSE_MOTHER") {
+          pool.behaviorType[slot] = BulletBehavior.STASIS_SPLIT_BURST;
+          pool.behaviorState[slot] = 0;
+          pool.param0[slot] = 0.16;
+          pool.param1[slot] = Math.max(14, Math.round(pool.param1[slot]) || 16);
+          pool.param2[slot] = Math.max(144, pool.param2[slot] || speed * 1.35);
+          pool.param3[slot] = duration + 0.08;
+          continue;
+        }
+
+        pool.behaviorType[slot] = BulletBehavior.DELAYED_RANDOM;
+        pool.behaviorState[slot] = 1;
+        pool.param0[slot] = 0;
+        pool.param1[slot] = duration + 0.08 + Math.random() * 0.18;
+        pool.param2[slot] = speed;
+        pool.param3[slot] = 0;
+      }
+    }
+
     applyGravityWell(slot, deltaTime) {
       if (!this.gravityWell.active) {
         return;
@@ -1078,25 +1152,50 @@
       const count = Math.max(1, Math.round(pool.param1[slot]));
       const speed = pool.param2[slot] * 0.65;
       const step = (Math.PI * 2) / count;
-      const startAngle = (pool.lifeTimer[slot] * 4.7) % (Math.PI * 2);
+      const sourceColor = pool.colors[slot];
+      const startAngle = pool.angleOffset[slot] + (pool.lifeTimer[slot] * 4.7) % (Math.PI * 2);
+      const groupId = pool.groupId[slot];
 
       this.recycle(pool, slot);
       this.spawnBurstFx(x, y, 20, 0.48);
 
       for (let i = 0; i < count; i += 1) {
-        const angle = startAngle + step * i;
+        const petalWave = sourceColor === "ROSE_MOTHER" ? Math.sin(i * 2.399 + startAngle) * 0.055 : 0;
+        const angle = startAngle + step * i + petalWave;
+        const layer = i % 6;
+        const petalColor = sourceColor === "ROSE_MOTHER"
+          ? layer === 0
+            ? "PETAL_WHITE"
+            : layer === 3
+              ? "PETAL_GOLD"
+              : "PETAL_DARK"
+          : "PETAL_DARK";
+        const petalSpeed = sourceColor === "ROSE_MOTHER"
+          ? speed * (0.86 + Math.sin(i * 1.7) * 0.09)
+          : speed;
         this.spawnBullet(
           x,
           y,
-          Math.cos(angle) * speed,
-          Math.sin(angle) * speed,
-          6,
-          "PETAL_DARK",
+          Math.cos(angle) * petalSpeed,
+          Math.sin(angle) * petalSpeed,
+          sourceColor === "ROSE_MOTHER" ? 5.4 : 6,
+          petalColor,
           1,
-          {
-            angleOffset: Math.random() * Math.PI * 2,
-            spinSpeed: 1.2,
-          }
+          sourceColor === "ROSE_MOTHER"
+            ? {
+                type: BulletBehavior.PETAL_RAIN,
+                param0: 3.8,
+                param1: 3.2 + (i % 5) * 0.16,
+                param2: 18 + (i % 4) * 3,
+                angleOffset: angle,
+                spinSpeed: 0.85 + (i % 3) * 0.18,
+                groupId,
+              }
+            : {
+                angleOffset: Math.random() * Math.PI * 2,
+                spinSpeed: 1.2,
+                groupId,
+              }
         );
       }
     }
@@ -1163,6 +1262,29 @@
         const dy = pool.y[slot] - centerY;
         const r = radius + pool.radius[slot];
         if (dx * dx + dy * dy <= r * r) {
+          this.recycle(pool, slot);
+          continue;
+        }
+        i += 1;
+      }
+    }
+
+    clearEnemyBulletsByGroupId(groupId, colors = null, dissolve = false) {
+      if (!groupId) {
+        return;
+      }
+
+      const pool = this.enemyPool;
+      let i = 0;
+      let fxCount = 0;
+      while (i < pool.count) {
+        const slot = pool.activeIndices[i];
+        const matchesColor = !colors || colors.includes(pool.colors[slot]);
+        if (pool.groupId[slot] === groupId && matchesColor) {
+          if (dissolve && fxCount < 24) {
+            this.spawnBurstFx(pool.x[slot], pool.y[slot], Math.max(10, pool.radius[slot] * 1.25), 0.34);
+            fxCount += 1;
+          }
           this.recycle(pool, slot);
           continue;
         }
@@ -1251,6 +1373,7 @@
       pool.originY[slot] = 0;
       pool.angleOffset[slot] = 0;
       pool.spinSpeed[slot] = 0;
+      pool.groupId[slot] = 0;
       pool.freeIndices[pool.freeTop] = slot;
       pool.freeTop += 1;
     }
@@ -1442,6 +1565,17 @@
       let count = 0;
       for (let i = 0; i < pool.count; i += 1) {
         if (pool.colors[pool.activeIndices[i]] === color) {
+          count += 1;
+        }
+      }
+      return count;
+    }
+
+    countEnemyBulletsByBehavior(behaviorType) {
+      const pool = this.enemyPool;
+      let count = 0;
+      for (let i = 0; i < pool.count; i += 1) {
+        if (pool.behaviorType[pool.activeIndices[i]] === behaviorType) {
           count += 1;
         }
       }

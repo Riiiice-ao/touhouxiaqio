@@ -215,7 +215,11 @@
       return;
     }
 
-    if (gameState.mode === "practice" && gameState.practiceStage && gameState.practicePhase) {
+    if (
+      gameState.mode === "practice" &&
+      gameState.practiceStage !== null &&
+      gameState.practicePhase !== null
+    ) {
       startPractice(gameState.practiceStage, gameState.practicePhase, gameState.practiceDifficulty);
       return;
     }

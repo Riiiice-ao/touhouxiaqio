@@ -12,9 +12,12 @@
       this.autoPlayButton = document.getElementById("autoPlayButton");
       this.practiceToggleButton = document.getElementById("practiceToggleButton");
       this.practiceMenu = document.getElementById("practiceMenu");
+      this.practiceCloseButton = document.getElementById("practiceCloseButton");
       this.practiceDifficultyButtons = Array.from(document.querySelectorAll("[data-practice-difficulty]"));
+      this.practiceStageButtons = Array.from(document.querySelectorAll("[data-practice-stage-filter]"));
       this.practiceButtons = Array.from(document.querySelectorAll("[data-practice-stage][data-practice-phase]"));
       this.selectedPracticeDifficulty = "hard";
+      this.selectedPracticeStage = "1";
       this.pauseButton = document.getElementById("pauseButton");
       this.resumeButton = document.getElementById("resumeButton");
       this.restartButton = document.getElementById("restartButton");
@@ -41,7 +44,11 @@
         if (this.practiceToggleButton.disabled) {
           return;
         }
-        this.practiceMenu.classList.toggle("is-hidden");
+        this.show(this.practiceMenu);
+        this.updatePracticeStageButtons();
+      });
+      this.practiceCloseButton.addEventListener("click", () => {
+        this.hide(this.practiceMenu);
       });
       this.practiceDifficultyButtons.forEach((button) => {
         button.addEventListener("click", () => {
@@ -52,14 +59,27 @@
           this.updatePracticeDifficultyButtons();
         });
       });
+      this.practiceStageButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          if (button.disabled) {
+            return;
+          }
+          this.selectedPracticeStage = button.dataset.practiceStageFilter || "1";
+          this.updatePracticeStageButtons();
+        });
+      });
       this.practiceButtons.forEach((button) => {
         button.addEventListener("click", () => {
+          if (button.disabled) {
+            return;
+          }
           const stage = Number(button.dataset.practiceStage);
           const phase = Number(button.dataset.practicePhase);
           actions.onPractice(stage, phase, this.selectedPracticeDifficulty);
         });
       });
       this.updatePracticeDifficultyButtons();
+      this.updatePracticeStageButtons();
       this.pauseButton.addEventListener("click", actions.onPauseMenu);
       this.resumeButton.addEventListener("click", actions.onResume);
       this.restartButton.addEventListener("click", actions.onRestartConfirmed);
@@ -82,12 +102,14 @@
         this.autoPlayButton,
         this.practiceToggleButton,
         ...this.practiceDifficultyButtons,
+        ...this.practiceStageButtons,
         ...this.practiceButtons,
       ].forEach((button) => {
         button.disabled = !done;
         button.classList.toggle("is-disabled", !done);
       });
       this.updatePracticeDifficultyButtons();
+      this.updatePracticeStageButtons();
     }
 
     showStartMenu() {
@@ -95,11 +117,12 @@
       this.hide(this.pauseMenu);
       this.hide(this.gameOverMenu);
       this.hide(this.scoreBoard);
-      this.practiceMenu.classList.add("is-hidden");
+      this.hide(this.practiceMenu);
     }
 
     showPauseMenu() {
       this.hide(this.startMenu);
+      this.hide(this.practiceMenu);
       this.show(this.pauseMenu);
       this.hide(this.gameOverMenu);
       this.hide(this.scoreBoard);
@@ -107,6 +130,7 @@
 
     showGameOverMenu() {
       this.hide(this.startMenu);
+      this.hide(this.practiceMenu);
       this.hide(this.pauseMenu);
       this.show(this.gameOverMenu);
       this.hide(this.scoreBoard);
@@ -114,6 +138,7 @@
 
     showScoreBoard(result) {
       this.hide(this.startMenu);
+      this.hide(this.practiceMenu);
       this.hide(this.pauseMenu);
       this.hide(this.gameOverMenu);
       this.show(this.scoreBoard);
@@ -127,6 +152,7 @@
 
     hideAllOverlayMenus() {
       this.hide(this.startMenu);
+      this.hide(this.practiceMenu);
       this.hide(this.pauseMenu);
       this.hide(this.gameOverMenu);
       this.hide(this.scoreBoard);
@@ -145,6 +171,19 @@
         const selected = button.dataset.practiceDifficulty === this.selectedPracticeDifficulty;
         button.classList.toggle("is-selected", selected);
         button.setAttribute("aria-pressed", selected ? "true" : "false");
+      });
+    }
+
+    updatePracticeStageButtons() {
+      this.practiceStageButtons.forEach((button) => {
+        const selected = button.dataset.practiceStageFilter === this.selectedPracticeStage;
+        button.classList.toggle("is-selected", selected);
+        button.setAttribute("aria-pressed", selected ? "true" : "false");
+      });
+
+      this.practiceButtons.forEach((button) => {
+        const visible = button.dataset.practiceStage === this.selectedPracticeStage;
+        button.classList.toggle("is-hidden", !visible);
       });
     }
   }

@@ -46,19 +46,43 @@
               <button id="lunaticButton" class="menu-btn menu-btn-lunatic is-disabled" type="button" disabled>Lunatic</button>
               <button id="autoPlayButton" class="menu-btn menu-btn-easy is-disabled" type="button" disabled>Auto Demo</button>
               <button id="practiceToggleButton" class="menu-btn menu-btn-hard is-disabled" type="button" disabled>Practice</button>
-              <div id="practiceMenu" class="practice-menu is-hidden">
+            </div>
+          </div>
+        </div>
+
+        <div id="practiceMenu" class="overlay-screen practice-screen is-hidden">
+          <div class="overlay-panel modal-panel practice-panel">
+            <p class="eyebrow">Practice</p>
+            <h2>Practice Setup</h2>
+            <div class="practice-menu">
+              <section class="practice-step">
+                <span class="practice-step-label">Difficulty</span>
                 <div class="practice-difficulty">
                   <button class="menu-btn menu-btn-easy practice-choice is-disabled" type="button" data-practice-difficulty="easy" disabled>Easy</button>
                   <button class="menu-btn menu-btn-hard practice-choice is-selected is-disabled" type="button" data-practice-difficulty="hard" disabled>Hard</button>
                   <button class="menu-btn menu-btn-lunatic practice-choice is-disabled" type="button" data-practice-difficulty="lunatic" disabled>Lunatic</button>
                 </div>
-                <button class="menu-btn menu-btn-hard is-disabled" type="button" data-practice-stage="1" data-practice-phase="1" disabled>Practice 1-1</button>
-                <button class="menu-btn menu-btn-hard is-disabled" type="button" data-practice-stage="1" data-practice-phase="2" disabled>Practice 1-2</button>
-                <button class="menu-btn menu-btn-hard is-disabled" type="button" data-practice-stage="1" data-practice-phase="3" disabled>Practice 1-3</button>
-                <button class="menu-btn menu-btn-lunatic is-disabled" type="button" data-practice-stage="2" data-practice-phase="1" disabled>Practice 2-1</button>
-                <button class="menu-btn menu-btn-lunatic is-disabled" type="button" data-practice-stage="2" data-practice-phase="2" disabled>Practice 2-2</button>
-                <button class="menu-btn menu-btn-lunatic is-disabled" type="button" data-practice-stage="2" data-practice-phase="3" disabled>Practice 2-3</button>
-              </div>
+              </section>
+              <section class="practice-step">
+                <span class="practice-step-label">Stage</span>
+                <div class="practice-stage-select">
+                  <button class="menu-btn menu-btn-hard practice-choice is-selected is-disabled" type="button" data-practice-stage-filter="1" disabled>Stage 1</button>
+                  <button class="menu-btn menu-btn-lunatic practice-choice is-disabled" type="button" data-practice-stage-filter="2" disabled>Stage 2</button>
+                </div>
+              </section>
+              <section class="practice-step">
+                <span class="practice-step-label">Phase</span>
+                <div class="practice-phase-list">
+                  <button class="menu-btn menu-btn-hard is-disabled" type="button" data-practice-stage="1" data-practice-phase="1" disabled>Boss 1-1</button>
+                  <button class="menu-btn menu-btn-hard is-disabled" type="button" data-practice-stage="1" data-practice-phase="2" disabled>Boss 1-2</button>
+                  <button class="menu-btn menu-btn-hard is-disabled" type="button" data-practice-stage="1" data-practice-phase="3" disabled>Boss 1-3</button>
+                  <button class="menu-btn menu-btn-lunatic is-disabled is-hidden" type="button" data-practice-stage="2" data-practice-phase="0" disabled>Mid 2</button>
+                  <button class="menu-btn menu-btn-lunatic is-disabled is-hidden" type="button" data-practice-stage="2" data-practice-phase="1" disabled>Boss 2-1</button>
+                  <button class="menu-btn menu-btn-lunatic is-disabled is-hidden" type="button" data-practice-stage="2" data-practice-phase="2" disabled>Boss 2-2</button>
+                  <button class="menu-btn menu-btn-lunatic is-disabled is-hidden" type="button" data-practice-stage="2" data-practice-phase="3" disabled>Boss 2-3</button>
+                </div>
+              </section>
+              <button id="practiceCloseButton" class="menu-btn menu-btn-easy" type="button">Back</button>
             </div>
           </div>
         </div>
