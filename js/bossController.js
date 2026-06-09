@@ -989,12 +989,13 @@
       const spokes = this.isLunatic() ? 13 : this.isHard() ? 11 : 9;
       const base = this.phaseTimer * (2.2 + progress * 1.3);
       const originRadius = 10 + Math.sin(this.phaseTimer * 3.1) * 5;
+      const blueberryColors = ["BLUEBERRY_MOON", "BLUEBERRY_ORB", "BLUEBERRY_DEEP"];
 
       for (let i = 0; i < spokes; i += 1) {
         const theta = base + (Math.PI * 2 * i) / spokes;
-        const rose = 1 + 0.2 * Math.sin(theta * 5 + this.phaseTimer * 1.7);
+        const berryPulse = 1 + 0.2 * Math.sin(theta * 5 + this.phaseTimer * 1.7);
         const angle = theta + 0.34 * Math.sin(theta * 3 - this.phaseTimer * 1.2);
-        const speed = (90 + progress * 74) * rose;
+        const speed = (90 + progress * 74) * berryPulse;
         const spawnX = this.x + Math.cos(theta) * originRadius;
         const spawnY = this.y + Math.sin(theta) * originRadius;
         const velocity = {
@@ -1008,7 +1009,7 @@
           velocity.vx,
           velocity.vy,
           5.5,
-          i % 3 === 0 ? "PETAL_WHITE" : i % 3 === 1 ? "PETAL_ORANGE" : "PETAL_DARK",
+          blueberryColors[i % blueberryColors.length],
           1,
           {
             angleOffset: theta,

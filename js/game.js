@@ -91,7 +91,7 @@
 
     try {
       await audioManager.resume();
-      await audioManager.playTrack("stage");
+      await audioManager.playTrack("stage", 1);
     } catch {
       // audio permission or codec failure should not block the game start
     }
@@ -117,7 +117,7 @@
 
     try {
       await audioManager.resume();
-      await audioManager.playTrack("stage");
+      await audioManager.playTrack("stage", 1);
     } catch {
       // audio permission or codec failure should not block the game start
     }
@@ -145,7 +145,7 @@
 
     try {
       await audioManager.resume();
-      await audioManager.playTrack("boss");
+      await audioManager.playTrack("boss", stage);
     } catch {
       // audio permission or codec failure should not block the practice start
     }
@@ -226,7 +226,7 @@
 
     window.isAutoPlay = false;
     resetRunState();
-    audioManager.playTrack("stage").catch(() => {});
+    audioManager.playTrack("stage", 1).catch(() => {});
     stageManager.beginIntroDialogue();
   }
 
@@ -345,19 +345,11 @@
   function update(deltaTime) {
     const audioAnalysis = audioManager.update(deltaTime);
 
-    if (
-      (stageManager.stagePhase === "MID_BOSS_ENTRY" || stageManager.stagePhase === "BOSS_ENTRY") &&
-      !gameState.bossMusicStarted &&
-      !dialogueManager.active
-    ) {
-      gameState.bossMusicStarted = true;
-      audioManager.playTrack("boss").catch(() => {});
-    }
-
     if (gameState.scene !== "playing" || gameState.isPaused || dialogueManager.active || stageManager.pauseForDialogue) {
       return;
     }
 
+    syncMusicForCurrentPhase();
     updateBackground(deltaTime);
     if (window.isAutoPlay) {
       player.updateAutoPlay(deltaTime, { bulletManager, bossController, enemyManager });
@@ -386,6 +378,22 @@
       gameState.scene = "gameover";
       gameState.isPaused = true;
       ui.showGameOverMenu();
+    }
+  }
+
+  function syncMusicForCurrentPhase() {
+    const phase = stageManager.stagePhase;
+    const isBossPhase =
+      phase === "MID_BOSS_ENTRY" ||
+      phase === "MID_BOSS" ||
+      phase === "BOSS_ENTRY" ||
+      phase === "BOSS";
+    const trackKey = isBossPhase ? "boss" : "stage";
+    const stage = stageManager.currentStage || 1;
+
+    gameState.bossMusicStarted = isBossPhase;
+    if (!audioManager.isTrackActive(trackKey, stage)) {
+      audioManager.playTrack(trackKey, stage).catch(() => {});
     }
   }
 

@@ -157,6 +157,7 @@
         whitePetal: createCanvas(84 * bulletScale),
         leafPetal: createCanvas(114 * bulletScale),
         orangePetal: createCanvas(126 * bulletScale),
+        blueberryOrb: createCanvas(102 * bulletScale),
       };
 
       this.paintBoundaryOrb(cache.barrierCyan.ctx, cache.barrierCyan.size, "#00FFFF");
@@ -175,6 +176,7 @@
       this.paintWhitePetal(cache.whitePetal.ctx, cache.whitePetal.size);
       this.paintLeafPetal(cache.leafPetal.ctx, cache.leafPetal.size);
       this.paintOrangePetal(cache.orangePetal.ctx, cache.orangePetal.size);
+      this.paintBlueberryOrb(cache.blueberryOrb.ctx, cache.blueberryOrb.size);
 
       return cache;
     }
@@ -257,6 +259,62 @@
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+    }
+
+    paintBlueberryOrb(ctx, size) {
+      const cx = size * 0.5;
+      const cy = size * 0.5;
+      const r = size * 0.29;
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.shadowColor = "rgba(37,83,255,0.88)";
+      ctx.shadowBlur = 18;
+
+      const halo = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 1.55);
+      halo.addColorStop(0, "rgba(190,220,255,0.72)");
+      halo.addColorStop(0.42, "rgba(60,110,255,0.46)");
+      halo.addColorStop(1, "rgba(4,9,55,0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.42, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      const core = ctx.createRadialGradient(cx - r * 0.26, cy - r * 0.30, 0, cx, cy, r);
+      core.addColorStop(0, "#F7FBFF");
+      core.addColorStop(0.18, "#8AB7FF");
+      core.addColorStop(0.58, "#183E9B");
+      core.addColorStop(1, "#061143");
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      const rim = ctx.createRadialGradient(cx, cy, r * 0.72, cx, cy, r * 1.08);
+      rim.addColorStop(0, "rgba(255,255,255,0)");
+      rim.addColorStop(0.68, "rgba(91,145,255,0.42)");
+      rim.addColorStop(1, "rgba(255,255,255,0.82)");
+      ctx.fillStyle = rim;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.03, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(230,242,255,0.95)";
+      ctx.lineWidth = Math.max(1, size * 0.014);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.98, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,255,0.86)";
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.34, cy - r * 0.38, r * 0.17, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(120,174,255,0.58)";
+      ctx.beginPath();
+      ctx.arc(cx + r * 0.18, cy + r * 0.22, r * 0.10, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
@@ -1458,6 +1516,14 @@
         return {
           sprite: this.spriteCache.barrierGold.canvas,
           size: (radius + 7) * visualScale,
+          composite: "lighter",
+        };
+      }
+
+      if (color === "BLUEBERRY_ORB" || color === "BLUEBERRY_DEEP" || color === "BLUEBERRY_MOON") {
+        return {
+          sprite: this.spriteCache.blueberryOrb.canvas,
+          size: (radius + 8) * visualScale,
           composite: "lighter",
         };
       }

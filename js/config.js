@@ -30,6 +30,16 @@ window.XTouhouWeb.Config = {
   BOMB_EFFECT_DURATION: 0.55,
   MAX_BOMB_STOCK: 3,
   MAX_LIFE_STOCK: 3,
-  AUDIO_TRACK_STAGE: "./sound/petrouchka1.mp3",
-  AUDIO_TRACK_BOSS: "./sound/K.156-3.mp3",
+  AUDIO_TRACK_STAGE: "./sound/L.mp3",
+  AUDIO_TRACK_BOSS: "./sound/EPITAPHE DE SEIKILOS.mp3",
+  AUDIO_TRACKS: {
+    stage: {
+      1: "./sound/L.mp3",
+      2: "./sound/petrouchka1.mp3",
+    },
+    boss: {
+      1: "./sound/EPITAPHE DE SEIKILOS.mp3",
+      2: "./sound/K.156-3.mp3",
+    },
+  },
 };

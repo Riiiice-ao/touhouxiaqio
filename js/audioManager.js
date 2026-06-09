@@ -48,20 +48,43 @@
       }
     }
 
-    async playTrack(trackKey) {
+    normalizeStage(stage) {
+      return Math.max(1, Math.floor(Number(stage) || 1));
+    }
+
+    makeTrackId(trackKey, stage = 1) {
+      return `${trackKey}:${this.normalizeStage(stage)}`;
+    }
+
+    isTrackActive(trackKey, stage = 1) {
+      return this.currentTrack === this.makeTrackId(trackKey, stage);
+    }
+
+    resolveTrackSource(trackKey, stage = 1) {
+      const normalizedStage = this.normalizeStage(stage);
+      const stageTracks = global.Config.AUDIO_TRACKS?.[trackKey];
+      if (stageTracks?.[normalizedStage]) {
+        return stageTracks[normalizedStage];
+      }
+
+      return trackKey === "boss"
+        ? global.Config.AUDIO_TRACK_BOSS
+        : global.Config.AUDIO_TRACK_STAGE;
+    }
+
+    async playTrack(trackKey, stage = 1) {
       await this.resume();
-      if (this.currentTrack === trackKey) {
+      const trackId = this.makeTrackId(trackKey, stage);
+      if (this.currentTrack === trackId) {
         if (this.music.paused) {
           this.music.play().catch(() => {});
         }
         return;
       }
 
-      const src = trackKey === "boss"
-        ? global.Config.AUDIO_TRACK_BOSS
-        : global.Config.AUDIO_TRACK_STAGE;
+      const src = this.resolveTrackSource(trackKey, stage);
 
-      this.currentTrack = trackKey;
+      this.currentTrack = trackId;
       this.music.src = src;
       this.music.currentTime = 0;
       this.music.play().catch(() => {});
